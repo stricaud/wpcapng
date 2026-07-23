@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+# The WASM module is generated from libpcapng (npm run sync-wasm).
+src/wasm/libpcapng.mjs

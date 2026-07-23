@@ -1,0 +1,23 @@
+{
+  "name": "wpcapng",
+  "version": "0.1.0",
+  "description": "A web version of Wireshark — open, dissect, filter and analyse pcap/pcapng files entirely in your browser. Powered by libpcapng compiled to WebAssembly.",
+  "type": "module",
+  "scripts": {
+    "sync-wasm": "bash scripts/sync-wasm.sh",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
