@@ -426,6 +426,7 @@ export default function App() {
           <span>
             <strong>{fileName}</strong> · {summaries.length} packets
             {appliedFilter && ` · ${rows.length} shown`}
+            {(() => { const c = summaries.filter((s) => s.proto === "PCAPNG").length; return c > 0 ? ` · ${c} custom blocks` : ""; })()}
             {marked.size > 0 && ` · ${marked.size} marked`}
             {findStatus && ` · ${findStatus}`}
           </span>

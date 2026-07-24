@@ -13,7 +13,8 @@ const GEO_FIELDS = [
   "ip.geoip.src_org", "ip.geoip.dst_org",
 ];
 const TCP_FIELDS = ["tcp.analysis.retransmission", "tcp.analysis.duplicate_ack", "tcp.analysis.out_of_order"];
-export const ENRICH_FIELDS = [...GEO_FIELDS, ...TCP_FIELDS];
+const MISC_FIELDS = ["pcapng.custom"];
+export const ENRICH_FIELDS = [...GEO_FIELDS, ...TCP_FIELDS, ...MISC_FIELDS];
 const KNOWN = new Set(ENRICH_FIELDS);
 
 export interface TcpAnalysis {
@@ -45,10 +46,14 @@ export function buildEnrich(summaries: Summary[], geoDb: GeoDB | null, tcp: TcpA
     geo[i] = { srcC: s.country, dstC: d.country, srcA: s.asn, dstA: d.asn, srcO: s.org, dstO: d.org };
   }
 
+  const custom = new Uint8Array(n);
+  for (let i = 0; i < n; i++) custom[i] = summaries[i].proto === "PCAPNG" ? 1 : 0;
+
   const boolField = (f: string): Uint8Array | null =>
     f === "tcp.analysis.retransmission" ? tcp?.retransmission ?? null
     : f === "tcp.analysis.duplicate_ack" ? tcp?.dupAck ?? null
     : f === "tcp.analysis.out_of_order" ? tcp?.outOfOrder ?? null
+    : f === "pcapng.custom" ? custom
     : null;
 
   // candidate string values of a value-field for packet i (any-match over src/dst)
