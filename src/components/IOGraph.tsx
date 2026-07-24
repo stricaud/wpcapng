@@ -10,29 +10,17 @@ const INTERVALS = [
   { label: "60 s", v: 60 },
 ];
 
-const COLORS = ["#4a9eff", "#e8a33d", "#5fd35f", "#e8776b", "#b98bff", "#3ec9c9", "#f06fb0", "#c7c14a"];
+const COLORS = ["#e8a33d", "#5fd35f", "#4a9eff", "#e8776b", "#b98bff", "#3ec9c9", "#f06fb0", "#c7c14a"];
+const colorAt = (i: number) => COLORS[i % COLORS.length];
 
 interface Row {
   id: number;
-  name: string;
-  filter: string;
+  filter: string; // display filter; empty = all packets. Also the series label.
   color: string;
   enabled: boolean;
   yaxis: "packets" | "bytes";
   error: string | null;
 }
-
-let nextId = 1;
-const mkRow = (over: Partial<Row> = {}): Row => ({
-  id: nextId++,
-  name: over.name ?? "All packets",
-  filter: over.filter ?? "",
-  color: over.color ?? COLORS[(nextId - 1) % COLORS.length],
-  enabled: over.enabled ?? true,
-  yaxis: over.yaxis ?? "packets",
-  error: null,
-  ...over,
-});
 
 export default function IOGraph({
   engine,
@@ -44,7 +32,10 @@ export default function IOGraph({
   onClose: () => void;
 }) {
   const [interval, setInterval] = useState(1);
-  const [rows, setRows] = useState<Row[]>([mkRow({ name: "All packets", filter: "" })]);
+  const idRef = useRef(1);
+  const [rows, setRows] = useState<Row[]>([
+    { id: 0, filter: "", color: colorAt(0), enabled: true, yaxis: "packets", error: null },
+  ]);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInst = useRef<echarts.ECharts | null>(null);
 
@@ -54,7 +45,9 @@ export default function IOGraph({
     return { nb, labels: Array.from({ length: nb }, (_, i) => (i * interval).toFixed(2)) };
   }, [summaries, interval]);
 
-  // Evaluate all enabled filters in one pass, then bucketize each.
+  const label = (f: string) => f.trim() || "All packets";
+
+  // Evaluate all enabled, valid filters in one pass, then bucketize each.
   const series = useMemo(() => {
     const active = rows.filter((r) => r.enabled && !r.error);
     if (active.length === 0) return [];
@@ -68,12 +61,13 @@ export default function IOGraph({
         data[b] += r.yaxis === "bytes" ? summaries[i].length : 1;
       }
       return {
-        name: r.name || r.filter || "All",
+        name: label(r.filter),
         type: "line" as const,
         smooth: true,
         showSymbol: false,
         data,
         itemStyle: { color: r.color },
+        lineStyle: { color: r.color },
         yAxisIndex: r.yaxis === "bytes" ? 1 : 0,
       };
     });
@@ -98,7 +92,7 @@ export default function IOGraph({
       {
         backgroundColor: "transparent",
         tooltip: { trigger: "axis" },
-        legend: { data: series.map((s) => s.name), textStyle: { color: "#ccc" }, top: 0 },
+        legend: { data: series.map((s) => s.name), textStyle: { color: "#ccc" }, top: 0, type: "scroll" },
         grid: { left: 64, right: 64, top: 36, bottom: 56 },
         xAxis: { type: "category", data: buckets.labels, name: "Time (s)", nameLocation: "middle", nameGap: 30 },
         yAxis: [
@@ -125,6 +119,12 @@ export default function IOGraph({
       }),
     );
 
+  const addRow = () =>
+    setRows((rs) => [
+      ...rs,
+      { id: idRef.current++, filter: "", color: colorAt(rs.length), enabled: true, yaxis: "packets", error: null },
+    ]);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
@@ -143,18 +143,15 @@ export default function IOGraph({
             ))}
           </select>
           <span className="spacer" />
-          <button className="btn" onClick={() => setRows((rs) => [...rs, mkRow({ name: "", filter: "" })])}>
-            + Add filter
-          </button>
+          <button className="btn" onClick={addRow}>+ Add graph</button>
         </div>
 
         <table className="io-rows">
           <thead>
             <tr>
               <th></th>
-              <th>Name</th>
-              <th>Display filter</th>
-              <th>Y</th>
+              <th>Display filter (empty = all packets)</th>
+              <th>Y axis</th>
               <th>Color</th>
               <th></th>
             </tr>
@@ -166,13 +163,10 @@ export default function IOGraph({
                   <input type="checkbox" checked={r.enabled} onChange={(e) => update(r.id, { enabled: e.target.checked })} />
                 </td>
                 <td>
-                  <input className="text-input compact" value={r.name} placeholder="(name)" onChange={(e) => update(r.id, { name: e.target.value })} />
-                </td>
-                <td>
                   <input
                     className={`text-input compact mono${r.error ? " invalid" : ""}`}
                     value={r.filter}
-                    placeholder="(all packets)"
+                    placeholder="e.g. udp   ·   tcp.port == 443   ·   dns"
                     title={r.error ?? ""}
                     onChange={(e) => update(r.id, { filter: e.target.value })}
                   />
@@ -193,6 +187,11 @@ export default function IOGraph({
             ))}
           </tbody>
         </table>
+        {rows.some((r) => r.error) && (
+          <div className="note err" style={{ marginTop: 8 }}>
+            {rows.find((r) => r.error)?.error}
+          </div>
+        )}
       </div>
     </div>
   );
