@@ -8,6 +8,9 @@ import { buildEnrich } from "./enrichment";
 import { loadGeo, type GeoDB } from "./geoip";
 import { EXPERT_HELP, SEVERITY_META, loadExpert, saveExpert, type ExpertRule } from "./expert";
 import { csvCell, download, tryParseJson } from "./util";
+import { driveDownload, getAccessToken, parseDriveState, showPicker } from "./drive";
+import { GOOGLE_API_KEY, GOOGLE_CLIENT_ID, DRIVE_SCOPE } from "./driveConfig";
+import { parseKeyLog, type KeyLog } from "./tls13";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
@@ -111,6 +114,8 @@ export default function App() {
     return { active, masks };
   }, [engine, expertRules, enrich, summaries]);
   const [insightHelp, setInsightHelp] = useState<number | null>(null);
+  const [keylog, setKeylog] = useState<KeyLog | null>(null);
+  const keylogInput = useRef<HTMLInputElement>(null);
   const startTime = useMemo(() => engine?.getStartTime?.() ?? 0, [engine, summaries]);
   const customValues = useMemo(() => {
     const m: Record<string, string[]> = {};
@@ -148,12 +153,15 @@ export default function App() {
   }, []);
 
   async function openFile(file: File) {
+    await openBytes(file.name, new Uint8Array(await file.arrayBuffer()));
+  }
+
+  async function openBytes(name: string, buf: Uint8Array) {
     if (!engine) return;
     setBusy(true);
     try {
-      const buf = new Uint8Array(await file.arrayBuffer());
       engine.loadCapture(buf);
-      setFileName(file.name);
+      setFileName(name);
       setSummaries(engine.getSummaries());
       setSelected(null);
       setDetail(null);
@@ -168,11 +176,51 @@ export default function App() {
       setFindStatus(null);
     } catch (err) {
       console.error("Failed to open capture:", err);
-      alert(`Failed to open ${file.name}: ${(err as Error).message}`);
+      alert(`Failed to open ${name}: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
   }
+
+  // ── Google Drive ──────────────────────────────────────────────────────────
+  const driveHandled = useRef(false);
+  async function openDriveId(id: string, token?: string) {
+    if (!GOOGLE_CLIENT_ID) {
+      alert("Google Drive isn't configured yet — set your OAuth client ID (see GOOGLE_DRIVE.md).");
+      return;
+    }
+    try {
+      const t = token ?? (await getAccessToken(GOOGLE_CLIENT_ID, DRIVE_SCOPE));
+      const { name, bytes } = await driveDownload(id, t);
+      await openBytes(name, bytes);
+    } catch (e) {
+      console.error(e);
+      alert(`Google Drive open failed: ${(e as Error).message}`);
+    }
+  }
+  async function openDrivePicker() {
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_API_KEY) {
+      alert("Set your Google OAuth client ID and API key first (see GOOGLE_DRIVE.md).");
+      return;
+    }
+    try {
+      const t = await getAccessToken(GOOGLE_CLIENT_ID, DRIVE_SCOPE);
+      const id = await showPicker(GOOGLE_API_KEY, t);
+      if (id) await openDriveId(id, t);
+    } catch (e) {
+      alert(`Google Drive picker failed: ${(e as Error).message}`);
+    }
+  }
+  // Handle Drive "Open with" (?state={ids,action}) once the engine is ready.
+  useEffect(() => {
+    if (!engine || driveHandled.current) return;
+    const st = parseDriveState();
+    if (st && st.ids.length) {
+      driveHandled.current = true;
+      openDriveId(st.ids[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine]);
 
   function selectPacket(idx: number) {
     if (!engine) return;
@@ -323,6 +371,19 @@ export default function App() {
             }}
           />
           <input
+            ref={keylogInput}
+            type="file"
+            style={{ display: "none" }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              const kl = parseKeyLog(await f.text());
+              setKeylog(kl);
+              alert(`Loaded TLS key log: ${kl.size} session secret set(s). Use "Decrypt TLS" in Follow Stream.`);
+            }}
+          />
+          <input
             className={`filter-input${filterErr ? " invalid" : ""}`}
             placeholder="Display filter — e.g. tcp.port == 443 && ip.addr == 10.0.0.1   (Enter to apply)"
             value={filter}
@@ -356,6 +417,8 @@ export default function App() {
             label="File"
             items={[
               { label: "Open capture…", onClick: () => fileInput.current?.click(), disabled: !engine },
+              { label: "Open from Google Drive…", onClick: () => openDrivePicker(), disabled: !engine },
+              { label: keylog ? "Load TLS key log (replace)…" : "Load TLS key log…", onClick: () => keylogInput.current?.click() },
               { label: "Save as / Export…  ⌘S", onClick: () => setOverlay({ kind: "saveas" }), disabled: !hasCapture },
               { label: "Export summary (CSV)", onClick: () => exportSummary("csv"), disabled: !hasCapture },
               { label: "Export summary (JSON)", onClick: () => exportSummary("json"), disabled: !hasCapture },
@@ -524,7 +587,7 @@ export default function App() {
           />
         )}
         {engine && overlay?.kind === "follow" && (
-          <FollowStream engine={engine} index={overlay.index} onClose={() => setOverlay(null)} />
+          <FollowStream engine={engine} index={overlay.index} keylog={keylog} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "iograph" && (
           <IOGraph engine={engine} summaries={summaries} onClose={() => setOverlay(null)} />
