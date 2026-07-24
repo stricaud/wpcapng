@@ -495,6 +495,7 @@ export default function App() {
         {engine && overlay?.kind === "expert" && (
           <ExpertInfo
             engine={engine}
+            enrich={enrich}
             onApplyFilter={applyFilter}
             onJump={(idx) => { selectPacket(idx); setOverlay(null); }}
             onClose={() => setOverlay(null)}

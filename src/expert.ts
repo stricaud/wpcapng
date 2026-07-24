@@ -21,6 +21,9 @@ const KEY = "wpcapng.expert.v1";
 // Filter-driven expert rules — extend freely, like coloring rules.
 const BASE: Omit<ExpertRule, "id" | "enabled">[] = [
   { severity: "error", name: "Bad IP header checksum", filter: "ip.checksum.bad" },
+  { severity: "warn", name: "TCP retransmission", filter: "tcp.analysis.retransmission" },
+  { severity: "warn", name: "TCP out-of-order segment", filter: "tcp.analysis.out_of_order" },
+  { severity: "note", name: "TCP duplicate ACK", filter: "tcp.analysis.duplicate_ack" },
   { severity: "warn", name: "Connection reset (RST)", filter: "tcp.flags.reset == 1" },
   { severity: "warn", name: "TCP zero window", filter: "tcp.window_size == 0" },
   { severity: "warn", name: "ICMP destination unreachable", filter: "icmp.type == 3" },

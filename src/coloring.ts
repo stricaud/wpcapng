@@ -14,7 +14,10 @@ const KEY = "wpcapng.colorrules.v1";
 
 // Ordered: first matching rule wins (like Wireshark).
 export const DEFAULT_RULES: ColorRule[] = [
-  { name: "Bad TCP", filter: "tcp.flags.reset == 1", fg: "#ffffff", bg: "#7a1f1f" },
+  { name: "TCP retransmission", filter: "tcp.analysis.retransmission", fg: "#ffffff", bg: "#7a1f1f" },
+  { name: "TCP out-of-order", filter: "tcp.analysis.out_of_order", fg: "#ffd0ff", bg: "#4a2a4a" },
+  { name: "TCP duplicate ACK", filter: "tcp.analysis.duplicate_ack", fg: "#ffe0a0", bg: "#5a3a1a" },
+  { name: "Connection reset", filter: "tcp.flags.reset == 1", fg: "#ffffff", bg: "#7a1f1f" },
   { name: "HTTP", filter: "http || http2", fg: "#e8d9a0", bg: "#3a3320" },
   { name: "DNS", filter: "dns", fg: "#d0b8ff", bg: "#2b2438" },
   { name: "TLS", filter: "tls", fg: "#a0e8c0", bg: "#14322a" },

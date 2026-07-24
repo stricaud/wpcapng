@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import type { LibpcapngModule } from "../engine";
+import type { Enrich } from "../enrichment";
 import {
   DEFAULT_EXPERT, SEVERITY_META, SEVERITY_ORDER, loadExpert, saveExpert,
   type ExpertRule, type Severity,
@@ -12,11 +13,13 @@ interface Finding extends ExpertRule {
 
 export default function ExpertInfo({
   engine,
+  enrich,
   onJump,
   onApplyFilter,
   onClose,
 }: {
   engine: LibpcapngModule;
+  enrich: Enrich;
   onJump: (idx: number) => void;
   onApplyFilter: (expr: string) => void;
   onClose: () => void;
@@ -31,14 +34,20 @@ export default function ExpertInfo({
   const findings = useMemo<Finding[]>(() => {
     const active = rules.filter((r) => r.enabled && r.filter.trim());
     if (active.length === 0) return [];
-    const masks = engine.matchFilters(active.map((r) => r.filter));
+    // enrichment rules (ip.geoip.* / tcp.analysis.*) evaluate in JS; the rest batch through WASM
+    const enrichMasks = active.map((r) => (enrich.isEnrichExpr(r.filter) ? enrich.maskFor(r.filter) : null));
+    const wasmIdx: number[] = [];
+    active.forEach((_, k) => { if (!enrichMasks[k]) wasmIdx.push(k); });
+    const wasmMasks = wasmIdx.length ? engine.matchFilters(wasmIdx.map((k) => active[k].filter)) : [];
+    const masks: (Uint8Array | null)[] = active.map((_, k) => enrichMasks[k]);
+    wasmIdx.forEach((k, j) => (masks[k] = wasmMasks[j]));
     return active.map((r, k) => {
       const packets: number[] = [];
       const mask = masks[k];
-      for (let i = 0; i < mask.length; i++) if (mask[i]) packets.push(i);
+      if (mask) for (let i = 0; i < mask.length; i++) if (mask[i]) packets.push(i);
       return { ...r, packets };
     }).filter((f) => f.packets.length > 0);
-  }, [engine, rules]);
+  }, [engine, rules, enrich]);
 
   const validErr = (f: string) => {
     if (!f.trim()) return null;
