@@ -30,6 +30,7 @@ import DecodeAsDialog from "./components/DecodeAsDialog";
 // Heavy views (ECharts / fflate) stay code-split.
 const IOGraph = lazy(() => import("./components/IOGraph"));
 const ExportObjects = lazy(() => import("./components/ExportObjects"));
+const CustomBlocks = lazy(() => import("./components/CustomBlocks"));
 const EntityExplorer = lazy(() => import("./components/EntityExplorer"));
 const StreamGraph = lazy(() => import("./components/StreamGraph"));
 const ProtocolCharts = lazy(() => import("./components/ProtocolCharts"));
@@ -55,6 +56,7 @@ type Overlay =
   | { kind: "geomap" }
   | { kind: "coloring" }
   | { kind: "objects"; proto: "http" | "smb" }
+  | { kind: "customblocks" }
   | { kind: "posa" }
   | { kind: "builder"; index: number }
   | { kind: "columns" }
@@ -402,6 +404,7 @@ export default function App() {
             items={[
               { label: "HTTP Objects…", onClick: () => setOverlay({ kind: "objects", proto: "http" }), disabled: !hasCapture },
               { label: "SMB Objects…", onClick: () => setOverlay({ kind: "objects", proto: "smb" }), disabled: !hasCapture },
+              { label: "Custom Blocks…", onClick: () => setOverlay({ kind: "customblocks" }), disabled: !hasCapture },
             ]}
           />
           <Menu
@@ -596,6 +599,9 @@ export default function App() {
         )}
         {engine && overlay?.kind === "objects" && (
           <ExportObjects engine={engine} proto={overlay.proto} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "customblocks" && (
+          <CustomBlocks engine={engine} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "find" && (
           <FindDialog

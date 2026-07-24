@@ -128,6 +128,7 @@ export interface LibpcapngModule {
   matchFilter(expr: string): Uint8Array; // 1 byte per packet
   matchFilters(exprs: string[]): Uint8Array[]; // one mask per expr
   exportPcapng(indices: number[]): Uint8Array; // subset → new pcapng
+  getCustomBlocks(): { frame: number; pen: number; size: number; data: Uint8Array }[];
   getComment(index: number): string;
   setComment(index: number, text: string): void;
   getCommentedPackets(): number[];
