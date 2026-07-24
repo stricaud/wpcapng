@@ -6,12 +6,14 @@ function FieldNode({
   onHover,
   onSelect,
   selected,
+  active,
   depth,
 }: {
   field: Field;
   onHover: (range: [number, number] | null) => void;
   onSelect: (range: [number, number]) => void;
   selected: [number, number] | null;
+  active: [number, number] | null;
   depth: number;
 }) {
   const hasKids = field.children.length > 0;
@@ -28,6 +30,10 @@ function FieldNode({
 
   const isSelected =
     selected != null && field.off === selected[0] && field.len === selected[1];
+
+  // Tinted (but not committed) when a byte is hovered over in the hex view.
+  const isActive =
+    active != null && field.off === active[0] && field.len === active[1];
 
   const [userOpen, setUserOpen] = useState(depth < 1);
   const open = containsAnchor ? true : userOpen;
@@ -47,7 +53,9 @@ function FieldNode({
     <div className="tree-node">
       <div
         ref={rowRef}
-        className={`tree-row${isSelected ? " selected" : ""}`}
+        className={`tree-row${isSelected ? " selected" : ""}${
+          isActive && !isSelected ? " active" : ""
+        }`}
         style={{ paddingLeft: depth * 14 + 4 }}
         onMouseEnter={() => field.len > 0 && onHover(range)}
         onMouseLeave={() => onHover(null)}
@@ -68,6 +76,7 @@ function FieldNode({
             onHover={onHover}
             onSelect={onSelect}
             selected={selected}
+            active={active}
             depth={depth + 1}
           />
         ))}
@@ -80,11 +89,13 @@ export default function DetailTree({
   onHover,
   onSelect,
   selected,
+  active,
 }: {
   layers: Field[] | null;
   onHover: (range: [number, number] | null) => void;
   onSelect: (range: [number, number]) => void;
   selected: [number, number] | null;
+  active: [number, number] | null;
 }) {
   if (!layers) return <div className="pane-empty">Select a packet</div>;
   return (
@@ -96,6 +107,7 @@ export default function DetailTree({
           onHover={onHover}
           onSelect={onSelect}
           selected={selected}
+          active={active}
           depth={0}
         />
       ))}

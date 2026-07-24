@@ -248,6 +248,9 @@ body {
 .tree-row.selected {
   background: var(--selected);
 }
+.tree-row.active {
+  background: #3a3a1c;
+}
 .twisty {
   width: 12px;
   color: var(--text-dim);

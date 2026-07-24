@@ -59,7 +59,10 @@ export default function App() {
     if (!detail) return null;
     let best: Field | null = null;
     const visit = (n: Field) => {
-      if (n.len > 0 && off >= n.off && off < n.off + n.len) {
+      // Skip the top-level "frame" meta-node: it spans the whole packet, so it
+      // would swallow any byte that has no more specific field (e.g. an
+      // undissected payload) and highlight everything.
+      if (n.abbrev !== "frame" && n.len > 0 && off >= n.off && off < n.off + n.len) {
         if (!best || n.len < best.len) best = n;
       }
       n.children.forEach(visit);
@@ -138,6 +141,7 @@ export default function App() {
           <DetailTree
             layers={detail}
             selected={highlight}
+            active={activeHighlight}
             onHover={setHover}
             onSelect={(r) => setHighlight(r)}
           />
@@ -147,10 +151,7 @@ export default function App() {
           <HexView
             bytes={bytes}
             highlight={activeHighlight}
-            onByteSelect={(o) => {
-              const r = fieldAtOffset(o);
-              if (r) setHighlight(r);
-            }}
+            onByteSelect={(o) => setHighlight(fieldAtOffset(o))}
             onByteHover={(o) => {
               if (o == null) {
                 setHover(null);
