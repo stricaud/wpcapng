@@ -31,6 +31,8 @@ export default function App() {
   const [highlight, setHighlight] = useState<[number, number] | null>(null);
   const [hover, setHover] = useState<[number, number] | null>(null);
   const [filter, setFilter] = useState("");
+  const [appliedFilter, setAppliedFilter] = useState("");
+  const [filterErr, setFilterErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -56,6 +58,9 @@ export default function App() {
       setDetail(null);
       setBytes(null);
       setHighlight(null);
+      setFilter("");
+      setAppliedFilter("");
+      setFilterErr(null);
     } finally {
       setBusy(false);
     }
@@ -89,16 +94,14 @@ export default function App() {
     return f ? [f.off, f.len] : null;
   }
 
-  // Simple case-insensitive substring filter across visible columns.
-  // (Wireshark-style display filters — tcp.port == 443 — are a planned next step.)
+  // Wireshark-style display filter, applied on Enter (each eval dissects every
+  // packet, so we don't run it on every keystroke).
   const rows = useMemo(() => {
     const all = summaries.map((s, idx) => ({ idx, s }));
-    const q = filter.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter(({ s }) =>
-      `${s.src} ${s.dst} ${s.proto} ${s.info}`.toLowerCase().includes(q),
-    );
-  }, [summaries, filter]);
+    if (!engine || !appliedFilter.trim()) return all;
+    const mask = engine.matchFilter(appliedFilter);
+    return all.filter(({ idx }) => mask[idx]);
+  }, [summaries, appliedFilter, engine]);
 
   const activeHighlight = hover ?? highlight;
 
@@ -126,11 +129,26 @@ export default function App() {
             }}
           />
           <input
-            className="filter-input"
-            placeholder="Filter (src, dst, protocol, info)…"
+            className={`filter-input${filterErr ? " invalid" : ""}`}
+            placeholder="Display filter — e.g. tcp.port == 443 && ip.addr == 10.0.0.1   (Enter to apply)"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setFilter(v);
+              if (!engine || !v.trim()) {
+                setFilterErr(null);
+                if (!v.trim()) setAppliedFilter("");
+                return;
+              }
+              const res = engine.validateFilter(v);
+              setFilterErr(res.ok ? null : res.error);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !filterErr) setAppliedFilter(filter);
+            }}
             disabled={summaries.length === 0}
+            title={filterErr ?? "Press Enter to apply"}
+            spellCheck={false}
           />
           <button
             className="btn"
@@ -215,7 +233,7 @@ export default function App() {
           <FollowStream engine={engine} index={overlay.index} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "iograph" && (
-          <IOGraph summaries={summaries} onClose={() => setOverlay(null)} />
+          <IOGraph engine={engine} summaries={summaries} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "conversations" && (
           <Conversations

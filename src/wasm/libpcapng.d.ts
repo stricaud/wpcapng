@@ -79,6 +79,10 @@ export interface LibpcapngModule {
   getConversations(): Conversation[];
   getStream(index: number): Stream | null;
   extractObjects(proto: "http" | "smb"): ExtractedObject[];
+  validateFilter(expr: string): { ok: boolean; error: string };
+  matchFilter(expr: string): Uint8Array; // 1 byte per packet
+  matchFilters(exprs: string[]): Uint8Array[]; // one mask per expr
+
   loadPosaText(src: string): PosaLoadResult;
   listPosa(): PosaInfo[];
   listProtocols(): string[];

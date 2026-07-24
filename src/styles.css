@@ -84,6 +84,10 @@ body {
   outline: none;
   border-color: var(--accent-2);
 }
+.filter-input.invalid {
+  border-color: #d9534f;
+  background: #2a1c1c;
+}
 
 .btn {
   padding: 6px 12px;
@@ -454,6 +458,43 @@ body {
   border-radius: 3px;
   padding: 1px 6px;
   font-size: 11px;
+}
+
+/* IO graph filter rows */
+.io-rows {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.io-rows th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 2px 6px;
+}
+.io-rows td {
+  padding: 3px 6px;
+}
+.text-input.compact {
+  margin-bottom: 0;
+  padding: 4px 8px;
+}
+.text-input.mono {
+  font-family: var(--mono);
+}
+.text-input.invalid {
+  border-color: #d9534f;
+  background: #2a1c1c;
+}
+.io-rows input[type="color"] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
 }
 .modal-head {
   display: flex;
