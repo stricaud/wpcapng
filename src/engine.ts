@@ -17,6 +17,8 @@ export type {
   Endpoint,
   HierarchyNode,
   Stream,
+  StreamPacket,
+  StreamTimeline,
   ExtractedObject,
   LibpcapngModule,
 } from "./wasm/libpcapng";

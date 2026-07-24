@@ -22,6 +22,10 @@ const GoToDialog = lazy(() => import("./components/GoToDialog"));
 const Endpoints = lazy(() => import("./components/Endpoints"));
 const EntityExplorer = lazy(() => import("./components/EntityExplorer"));
 const ProtocolHierarchy = lazy(() => import("./components/ProtocolHierarchy"));
+const StreamGraph = lazy(() => import("./components/StreamGraph"));
+const ProtocolCharts = lazy(() => import("./components/ProtocolCharts"));
+const FlowCharts = lazy(() => import("./components/FlowCharts"));
+const Distributions = lazy(() => import("./components/Distributions"));
 const ColoringRules = lazy(() => import("./components/ColoringRules"));
 const DissectorBuilder = lazy(() => import("./components/DissectorBuilder"));
 const ColumnsDialog = lazy(() => import("./components/ColumnsDialog"));
@@ -34,6 +38,10 @@ type Overlay =
   | { kind: "endpoints" }
   | { kind: "entities" }
   | { kind: "hierarchy" }
+  | { kind: "streamgraph"; index: number }
+  | { kind: "protocharts" }
+  | { kind: "flowcharts" }
+  | { kind: "distributions" }
   | { kind: "coloring" }
   | { kind: "objects"; proto: "http" | "smb" }
   | { kind: "posa" }
@@ -356,6 +364,10 @@ export default function App() {
               { label: "Conversations", onClick: () => setOverlay({ kind: "conversations" }), disabled: !hasCapture },
               { label: "Endpoints", onClick: () => setOverlay({ kind: "endpoints" }), disabled: !hasCapture },
               { label: "Protocol Hierarchy", onClick: () => setOverlay({ kind: "hierarchy" }), disabled: !hasCapture },
+              { label: "Protocol Breakdown (sunburst/river)", onClick: () => setOverlay({ kind: "protocharts" }), disabled: !hasCapture },
+              { label: "Flow Analysis (Sankey/heatmap)", onClick: () => setOverlay({ kind: "flowcharts" }), disabled: !hasCapture },
+              { label: "Packet Distributions", onClick: () => setOverlay({ kind: "distributions" }), disabled: !hasCapture },
+              { label: "TCP Stream Graph", onClick: () => selected != null && setOverlay({ kind: "streamgraph", index: selected }), disabled: selected == null },
               { label: "Entity Explorer", onClick: () => setOverlay({ kind: "entities" }), disabled: !hasCapture },
             ]}
           />
@@ -480,6 +492,18 @@ export default function App() {
             onApplyFilter={applyFilter}
             onClose={() => setOverlay(null)}
           />
+        )}
+        {engine && overlay?.kind === "streamgraph" && (
+          <StreamGraph engine={engine} index={overlay.index} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "protocharts" && (
+          <ProtocolCharts engine={engine} summaries={summaries} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "flowcharts" && (
+          <FlowCharts engine={engine} summaries={summaries} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "distributions" && (
+          <Distributions summaries={summaries} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "coloring" && (
           <ColoringRules engine={engine} rules={colorRules} onChange={setColorRules} onClose={() => setOverlay(null)} />

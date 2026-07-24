@@ -78,6 +78,24 @@ export interface HierarchyNode {
   children: HierarchyNode[];
 }
 
+export interface StreamPacket {
+  no: number;
+  time: number; // absolute epoch seconds
+  seq: number;
+  ack: number;
+  len: number;
+  win: number;
+  dir: 0 | 1; // 0 = client→server, 1 = server→client
+  flags: number;
+}
+export interface StreamTimeline {
+  clientIp: string;
+  clientPort: number;
+  serverIp: string;
+  serverPort: number;
+  packets: StreamPacket[];
+}
+
 export interface ExtractedObject {
   proto: string;
   frame: number;
@@ -100,6 +118,7 @@ export interface LibpcapngModule {
   getEndpoints(): Endpoint[];
   getProtocolHierarchy(): HierarchyNode[];
   getStream(index: number): Stream | null;
+  getStreamPackets(index: number): StreamTimeline | null;
   extractObjects(proto: "http" | "smb"): ExtractedObject[];
   validateFilter(expr: string): { ok: boolean; error: string };
   matchFilter(expr: string): Uint8Array; // 1 byte per packet
