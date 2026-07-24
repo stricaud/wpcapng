@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import type { LibpcapngModule } from "../engine";
 import type { Enrich } from "../enrichment";
 import {
-  DEFAULT_EXPERT, SEVERITY_META, SEVERITY_ORDER, loadExpert, saveExpert,
+  DEFAULT_EXPERT, EXPERT_HELP, SEVERITY_META, SEVERITY_ORDER, loadExpert, saveExpert,
   type ExpertRule, type Severity,
 } from "../expert";
 import { download, pickTextFile } from "../util";
@@ -74,6 +74,7 @@ export default function ExpertInfo({
             );
           })}
           <span className="spacer" />
+          <span className="dim">click a finding for details &amp; fixes</span>
           <button className="btn" onClick={() => setShowRules((s) => !s)}>{showRules ? "Hide rules" : "Edit rules"}</button>
         </div>
 
@@ -92,18 +93,27 @@ export default function ExpertInfo({
                       <td className="num">{f.packets.length}</td>
                       <td><button className="btn small" onClick={(e) => { e.stopPropagation(); onApplyFilter(f.filter); }}>filter</button></td>
                     </tr>
-                    {expanded === f.id && (
-                      <tr>
-                        <td colSpan={4}>
-                          <div className="chip-row">
-                            {f.packets.slice(0, 100).map((idx) => (
-                              <span key={idx} className="chip" style={{ cursor: "pointer" }} onClick={() => onJump(idx)}>#{idx + 1}</span>
-                            ))}
-                            {f.packets.length > 100 && <span className="dim">+{f.packets.length - 100} more</span>}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
+                    {expanded === f.id && (() => {
+                      const help = f.info ? { info: f.info, fix: f.fix ?? "" } : EXPERT_HELP[f.filter];
+                      return (
+                        <tr>
+                          <td colSpan={4}>
+                            {help && (
+                              <div className="expert-help">
+                                <div><strong>What it means.</strong> {help.info}</div>
+                                {help.fix && <div style={{ marginTop: 4 }}><strong>How to fix.</strong> {help.fix}</div>}
+                              </div>
+                            )}
+                            <div className="chip-row" style={{ marginTop: 8 }}>
+                              {f.packets.slice(0, 100).map((idx) => (
+                                <span key={idx} className="chip" style={{ cursor: "pointer" }} onClick={() => onJump(idx)}>#{idx + 1}</span>
+                              ))}
+                              {f.packets.length > 100 && <span className="dim">+{f.packets.length - 100} more</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                   </Fragment>
                 )),
               )}

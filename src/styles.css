@@ -517,6 +517,20 @@ body {
   font-size: 11px;
 }
 
+.expert-help {
+  background: var(--bg);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: normal;
+}
+.expert-help strong {
+  color: var(--accent-2);
+}
+
 /* IO graph filter rows */
 .io-rows {
   width: 100%;

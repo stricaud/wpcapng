@@ -6,7 +6,50 @@ export interface ExpertRule {
   name: string;
   filter: string;
   enabled: boolean;
+  info?: string; // what it means
+  fix?: string; // suggested remediation
 }
+
+// Help keyed by filter, so explanations show even for rules already saved in
+// localStorage (which predate the info/fix fields).
+export const EXPERT_HELP: Record<string, { info: string; fix: string }> = {
+  "ip.checksum.bad": {
+    info: "The IPv4 header checksum doesn't match the header — the packet may be corrupted, or the checksum was offloaded to the NIC and left blank/incorrect at capture time.",
+    fix: "If you captured on the sending host this is usually harmless checksum offload — confirm on the receiver, or disable offload for testing (e.g. `ethtool -K <iface> tx off rx off`). Persistent mismatches on received traffic point to corruption or a faulty device/link.",
+  },
+  "tcp.analysis.retransmission": {
+    info: "A TCP segment carrying data that was already sent got sent again — the original segment or its ACK was lost or delayed.",
+    fix: "Look for packet loss on the path: congested links, overloaded middleboxes/NICs, or a lossy hop. Correlate with duplicate ACKs just before it and check interface error/drop counters at each hop.",
+  },
+  "tcp.analysis.out_of_order": {
+    info: "A segment arrived with a sequence number ahead of what was expected — earlier data is missing or arrived later.",
+    fix: "Often benign when traffic is spread over parallel paths/queues (ECMP, LACP hashing). If frequent, investigate reordering in the network or drops at the capture point.",
+  },
+  "tcp.analysis.duplicate_ack": {
+    info: "The receiver re-acknowledged the same sequence number, signalling it is missing a segment.",
+    fix: "Three or more duplicate ACKs trigger fast retransmit — indicates loss upstream of the receiver. Find the lossy hop; correlate with the matching retransmission.",
+  },
+  "tcp.flags.reset == 1": {
+    info: "A TCP RST abruptly aborted the connection instead of a graceful FIN close.",
+    fix: "Expected when a port is closed/refused or an app resets intentionally. If unexpected, check firewalls/IPS that inject resets, application crashes, or half-open/idle timeouts.",
+  },
+  "tcp.window_size == 0": {
+    info: "A host advertised a zero receive window — its receive buffer is full, so the sender must stop until the window reopens.",
+    fix: "The receiving application isn't reading fast enough. Investigate a slow/overloaded consumer, CPU starvation, or a stuck thread on the receiver.",
+  },
+  "icmp.type == 3": {
+    info: "A router or host reported the destination unreachable (network/host/port/fragmentation-needed).",
+    fix: "Port unreachable = nothing listening; check the service. Network/host = routing or firewall. 'Fragmentation needed' = a PMTUD black hole — fix MTU/clamp MSS.",
+  },
+  "http || http2": {
+    info: "Cleartext HTTP traffic (credentials, cookies and content are visible on the wire).",
+    fix: "Informational. For sensitive services, move to HTTPS/TLS.",
+  },
+  "tcp.checksum.bad": {
+    info: "The TCP checksum doesn't match — almost always NIC checksum offload on captured outbound packets, occasionally real corruption.",
+    fix: "Ignore for locally-captured egress traffic (offload). Verify on the receiver; genuine mismatches on inbound traffic indicate corruption.",
+  },
+};
 
 export const SEVERITY_ORDER: Severity[] = ["error", "warn", "note", "chat"];
 export const SEVERITY_META: Record<Severity, { label: string; color: string }> = {
