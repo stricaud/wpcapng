@@ -4,6 +4,8 @@ import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
 import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
 import { buildColumns, loadCols, loadTimeFormat, saveTimeFormat, type ColConfig, type TimeFormat } from "./columns";
+import { buildEnrich } from "./enrichment";
+import { loadGeo, type GeoDB } from "./geoip";
 import { csvCell, download } from "./util";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
@@ -71,7 +73,6 @@ export default function App() {
   const [filterErr, setFilterErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [overlay, setOverlay] = useState<Overlay>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [marked, setMarked] = useState<Set<number>>(new Set());
   const [comment, setComment] = useState("");
   const [commented, setCommented] = useState<Set<number>>(new Set());
@@ -80,14 +81,25 @@ export default function App() {
   const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
   const [colConfig, setColConfig] = useState<ColConfig[]>(loadCols());
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(loadTimeFormat());
+  const [geoDb, setGeoDb] = useState<GeoDB | null>(null);
+  useEffect(() => { loadGeo().then(setGeoDb); }, []);
+  const tcpAnalysis = useMemo(
+    () => (engine?.getTcpAnalysis && summaries.length ? engine.getTcpAnalysis() : null),
+    [engine, summaries],
+  );
+  const enrich = useMemo(() => buildEnrich(summaries, geoDb, tcpAnalysis), [summaries, geoDb, tcpAnalysis]);
   const startTime = useMemo(() => engine?.getStartTime?.() ?? 0, [engine, summaries]);
   const customValues = useMemo(() => {
     const m: Record<string, string[]> = {};
     if (engine?.getFieldColumn)
-      for (const c of colConfig)
-        if (c.visible && c.key.startsWith("custom:") && c.abbrev) m[c.key] = engine.getFieldColumn(c.abbrev);
+      for (const c of colConfig) {
+        if (!c.visible || !c.key.startsWith("custom:") || !c.abbrev) continue;
+        m[c.key] = enrich.has(c.abbrev)
+          ? summaries.map((_, i) => enrich.columnValue(c.abbrev!, i))
+          : engine.getFieldColumn(c.abbrev);
+      }
     return m;
-  }, [engine, summaries, colConfig]);
+  }, [engine, summaries, colConfig, enrich]);
   const columns = useMemo(
     () => buildColumns(colConfig, { timeFormat, startTime, summaries, custom: customValues }),
     [colConfig, timeFormat, startTime, summaries, customValues],
@@ -111,36 +123,6 @@ export default function App() {
       setEngine(m);
     });
   }, []);
-
-  // Window-level drag & drop — robust regardless of the pane/overlay layout.
-  useEffect(() => {
-    if (!engine) return;
-    const isFileDrag = (e: DragEvent) =>
-      !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
-    // dragover MUST preventDefault for a drop to fire.
-    const onOver = (e: DragEvent) => {
-      if (!isFileDrag(e)) return;
-      e.preventDefault();
-      setDragActive(true);
-    };
-    const onLeave = (e: DragEvent) => { if (e.relatedTarget === null) setDragActive(false); };
-    // On drop, read files directly — `types` is unreliable/empty here in Chrome.
-    const onDrop = (e: DragEvent) => {
-      const f = e.dataTransfer?.files?.[0];
-      if (!f) return;
-      e.preventDefault();
-      setDragActive(false);
-      openFile(f);
-    };
-    window.addEventListener("dragover", onOver);
-    window.addEventListener("dragleave", onLeave);
-    window.addEventListener("drop", onDrop);
-    return () => {
-      window.removeEventListener("dragover", onOver);
-      window.removeEventListener("dragleave", onLeave);
-      window.removeEventListener("drop", onDrop);
-    };
-  }, [engine]);
 
   async function openFile(file: File) {
     if (!engine) return;
@@ -214,16 +196,16 @@ export default function App() {
   const rows = useMemo(() => {
     const all = summaries.map((s, idx) => ({ idx, s }));
     if (!engine || !appliedFilter.trim()) return all;
-    const mask = engine.matchFilter(appliedFilter);
+    const mask = enrich.maskFor(appliedFilter) ?? engine.matchFilter(appliedFilter);
     return all.filter(({ idx }) => mask[idx]);
-  }, [summaries, appliedFilter, engine]);
+  }, [summaries, appliedFilter, engine, enrich]);
 
   const activeHighlight = hover ?? highlight;
 
   // Per-packet coloring from the coloring rules (first match wins).
   const rowColors = useMemo(
-    () => (engine ? computeRowColors(engine, colorRules, summaries.length) : []),
-    [engine, colorRules, summaries],
+    () => (engine ? computeRowColors(engine, colorRules, summaries.length, enrich) : []),
+    [engine, colorRules, summaries, enrich],
   );
 
   function runFind(dir: 1 | -1) {
@@ -285,15 +267,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {dragActive && (
-        <div className="drop-overlay">
-          <div className="drop-box">
-            <div className="drop-icon">🦈</div>
-            <div>Drop a <strong>.pcap</strong> / <strong>.pcapng</strong> to open</div>
-            <div className="dim">It stays in your browser — nothing is uploaded.</div>
-          </div>
-        </div>
-      )}
       <header className="toolbar">
         <div className="brand">
           <span className="logo">🦈</span>
@@ -327,6 +300,7 @@ export default function App() {
                 if (!v.trim()) setAppliedFilter("");
                 return;
               }
+              if (enrich.isEnrichExpr(v)) { setFilterErr(null); return; }
               const res = engine.validateFilter(v);
               setFilterErr(res.ok ? null : res.error);
             }}

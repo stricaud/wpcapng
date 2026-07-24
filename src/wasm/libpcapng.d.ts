@@ -119,6 +119,7 @@ export interface LibpcapngModule {
   getProtocolHierarchy(): HierarchyNode[];
   getStream(index: number): Stream | null;
   getStreamPackets(index: number): StreamTimeline | null;
+  getTcpAnalysis(): { retransmission: Uint8Array; dupAck: Uint8Array; outOfOrder: Uint8Array };
   extractObjects(proto: "http" | "smb"): ExtractedObject[];
   validateFilter(expr: string): { ok: boolean; error: string };
   matchFilter(expr: string): Uint8Array; // 1 byte per packet

@@ -1,4 +1,5 @@
 import type { LibpcapngModule } from "./engine";
+import type { Enrich } from "./enrichment";
 
 export interface ColorRule {
   id: number;
@@ -38,16 +39,29 @@ export function saveColorRules(rules: ColorRule[]): void {
 
 export type RowColor = { fg: string; bg: string } | null;
 
-// One color per packet: the first enabled rule whose filter matches. Evaluates
-// all rule filters in a single dissection pass via matchFilters.
-export function computeRowColors(engine: LibpcapngModule, rules: ColorRule[], count: number): RowColor[] {
+// One color per packet: the first enabled rule whose filter matches. WASM
+// display-filter rules are evaluated in a single batched pass; enrichment rules
+// (ip.geoip.* / tcp.analysis.*) are evaluated in JS.
+export function computeRowColors(
+  engine: LibpcapngModule,
+  rules: ColorRule[],
+  count: number,
+  enrich?: Enrich,
+): RowColor[] {
   const out: RowColor[] = new Array(count).fill(null);
   const active = rules.filter((r) => r.enabled && r.filter.trim());
   if (active.length === 0 || count === 0) return out;
-  const masks = engine.matchFilters(active.map((r) => r.filter));
+  // per-rule mask, aligned with `active`
+  const enrichMasks = active.map((r) => (enrich?.isEnrichExpr(r.filter) ? enrich.maskFor(r.filter) : null));
+  const wasmIdx: number[] = [];
+  active.forEach((_, k) => { if (!enrichMasks[k]) wasmIdx.push(k); });
+  const wasmMasks = wasmIdx.length ? engine.matchFilters(wasmIdx.map((k) => active[k].filter)) : [];
+  const masks: (Uint8Array | null)[] = active.map((_, k) => enrichMasks[k]);
+  wasmIdx.forEach((k, j) => (masks[k] = wasmMasks[j]));
+
   for (let i = 0; i < count; i++) {
     for (let k = 0; k < active.length; k++) {
-      if (masks[k][i]) {
+      if (masks[k] && masks[k]![i]) {
         out[i] = { fg: active[k].fg, bg: active[k].bg };
         break;
       }
