@@ -40,7 +40,7 @@ export function saveColorRules(rules: ColorRule[]): void {
   localStorage.setItem(KEY, JSON.stringify(rules));
 }
 
-export type RowColor = { fg: string; bg: string } | null;
+export type RowColor = { fg: string; bg: string; rule: string } | null;
 
 // One color per packet: the first enabled rule whose filter matches. WASM
 // display-filter rules are evaluated in a single batched pass; enrichment rules
@@ -65,7 +65,7 @@ export function computeRowColors(
   for (let i = 0; i < count; i++) {
     for (let k = 0; k < active.length; k++) {
       if (masks[k] && masks[k]![i]) {
-        out[i] = { fg: active[k].fg, bg: active[k].bg };
+        out[i] = { fg: active[k].fg, bg: active[k].bg, rule: active[k].name };
         break;
       }
     }

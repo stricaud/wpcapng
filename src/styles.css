@@ -517,6 +517,38 @@ body {
   font-size: 11px;
 }
 
+/* per-packet "why flagged" insights */
+.insights {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-alt);
+  font-size: 12px;
+}
+.ins-item {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-dim);
+}
+.insight-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 4px;
+  color: var(--text);
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.insight-chip:hover {
+  filter: brightness(1.2);
+}
+
 .expert-help {
   background: var(--bg);
   border-left: 3px solid var(--accent-2);

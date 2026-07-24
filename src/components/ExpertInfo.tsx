@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import type { LibpcapngModule } from "../engine";
 import type { Enrich } from "../enrichment";
 import {
-  DEFAULT_EXPERT, EXPERT_HELP, SEVERITY_META, SEVERITY_ORDER, loadExpert, saveExpert,
+  DEFAULT_EXPERT, EXPERT_HELP, SEVERITY_META, SEVERITY_ORDER,
   type ExpertRule, type Severity,
 } from "../expert";
 import { download, pickTextFile } from "../util";
@@ -14,21 +14,24 @@ interface Finding extends ExpertRule {
 export default function ExpertInfo({
   engine,
   enrich,
+  rules,
+  onChange,
   onJump,
   onApplyFilter,
   onClose,
 }: {
   engine: LibpcapngModule;
   enrich: Enrich;
+  rules: ExpertRule[];
+  onChange: (rules: ExpertRule[]) => void;
   onJump: (idx: number) => void;
   onApplyFilter: (expr: string) => void;
   onClose: () => void;
 }) {
-  const [rules, setRules] = useState<ExpertRule[]>(loadExpert());
   const [showRules, setShowRules] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  const commit = (next: ExpertRule[]) => { setRules(next); saveExpert(next); };
+  const commit = (next: ExpertRule[]) => onChange(next);
   const update = (id: number, patch: Partial<ExpertRule>) => commit(rules.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const findings = useMemo<Finding[]>(() => {

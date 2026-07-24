@@ -18,6 +18,18 @@ export default function StreamGraph({
   const chartInst = useRef<echarts.ECharts | null>(null);
 
   const tl = useMemo(() => engine.getStreamPackets(index), [engine, index]);
+  const analysis = useMemo(() => {
+    if (!tl) return { retr: 0, dup: 0, ooo: 0 };
+    const a = engine.getTcpAnalysis();
+    let retr = 0, dup = 0, ooo = 0;
+    for (const p of tl.packets) {
+      const i = p.no - 1;
+      if (a.retransmission[i]) retr++;
+      if (a.dupAck[i]) dup++;
+      if (a.outOfOrder[i]) ooo++;
+    }
+    return { retr, dup, ooo };
+  }, [engine, tl]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -146,6 +158,12 @@ export default function StreamGraph({
           <button className="btn" onClick={onClose}>✕</button>
         </div>
         <div className="fs-toolbar">
+          <span className="legend">
+            <span style={{ color: "#e8776b" }}>{analysis.retr} retrans</span>{" · "}
+            <span style={{ color: "#e8a33d" }}>{analysis.dup} dup-ACK</span>{" · "}
+            <span style={{ color: "#b98bff" }}>{analysis.ooo} out-of-order</span>
+          </span>
+          <span className="spacer" />
           <span className="dim">Graph</span>
           <select className="sel" value={gtype} onChange={(e) => setGType(e.target.value as GraphType)}>
             <option value="seq">Time / Sequence (Stevens)</option>

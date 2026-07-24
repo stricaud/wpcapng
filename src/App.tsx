@@ -6,6 +6,7 @@ import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
 import { buildColumns, loadCols, loadTimeFormat, saveTimeFormat, type ColConfig, type TimeFormat } from "./columns";
 import { buildEnrich } from "./enrichment";
 import { loadGeo, type GeoDB } from "./geoip";
+import { EXPERT_HELP, SEVERITY_META, loadExpert, saveExpert, type ExpertRule } from "./expert";
 import { csvCell, download } from "./util";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
@@ -88,6 +89,22 @@ export default function App() {
     [engine, summaries],
   );
   const enrich = useMemo(() => buildEnrich(summaries, geoDb, tcpAnalysis), [summaries, geoDb, tcpAnalysis]);
+  const [expertRules, setExpertRules] = useState<ExpertRule[]>(loadExpert());
+  const changeExpert = (r: ExpertRule[]) => { setExpertRules(r); saveExpert(r); };
+  // Evaluate enabled expert rules once (WASM batch + JS enrichment), shared by
+  // the Expert Info panel and the per-packet "why flagged" insights.
+  const expertEval = useMemo(() => {
+    if (!engine || !summaries.length) return { active: [] as ExpertRule[], masks: [] as (Uint8Array | null)[] };
+    const active = expertRules.filter((r) => r.enabled && r.filter.trim());
+    const em = active.map((r) => (enrich.isEnrichExpr(r.filter) ? enrich.maskFor(r.filter) : null));
+    const wi: number[] = [];
+    active.forEach((_, k) => { if (!em[k]) wi.push(k); });
+    const wm = wi.length ? engine.matchFilters(wi.map((k) => active[k].filter)) : [];
+    const masks: (Uint8Array | null)[] = active.map((_, k) => em[k]);
+    wi.forEach((k, j) => (masks[k] = wm[j]));
+    return { active, masks };
+  }, [engine, expertRules, enrich, summaries]);
+  const [insightHelp, setInsightHelp] = useState<number | null>(null);
   const startTime = useMemo(() => engine?.getStartTime?.() ?? 0, [engine, summaries]);
   const customValues = useMemo(() => {
     const m: Record<string, string[]> = {};
@@ -158,6 +175,7 @@ export default function App() {
     setBytes(engine.getPacketBytes(idx));
     setHighlight(null);
     setComment(engine.getComment(idx));
+    setInsightHelp(null);
   }
 
   function editComment(text: string) {
@@ -207,6 +225,12 @@ export default function App() {
     () => (engine ? computeRowColors(engine, colorRules, summaries.length, enrich) : []),
     [engine, colorRules, summaries, enrich],
   );
+  const insights = useMemo(() => {
+    if (selected == null) return null;
+    const color = rowColors[selected]?.rule ?? null;
+    const findings = expertEval.active.filter((_, k) => expertEval.masks[k]?.[selected]);
+    return color || findings.length ? { color, findings } : null;
+  }, [selected, rowColors, expertEval]);
 
   function runFind(dir: 1 | -1) {
     if (!engine) return;
@@ -409,6 +433,37 @@ export default function App() {
       <div className="lower">
         <div className="pane detail-pane">
           <div className="pane-title">Packet details</div>
+          {insights && (
+            <div className="insights">
+              {insights.color && selected != null && (
+                <span className="ins-item">
+                  <span className="sw" style={{ background: rowColors[selected]?.bg }} /> Colored:&nbsp;<strong>{insights.color}</strong>
+                </span>
+              )}
+              {insights.findings.map((f) => (
+                <button
+                  key={f.id}
+                  className="insight-chip"
+                  style={{ borderColor: SEVERITY_META[f.severity].color }}
+                  onClick={() => setInsightHelp(insightHelp === f.id ? null : f.id)}
+                >
+                  <span className="sw" style={{ background: SEVERITY_META[f.severity].color, margin: "0 5px 0 0" }} />
+                  {f.name}
+                </button>
+              ))}
+              {insightHelp != null && (() => {
+                const f = insights.findings.find((x) => x.id === insightHelp);
+                if (!f) return null;
+                const h = f.info ? { info: f.info, fix: f.fix ?? "" } : EXPERT_HELP[f.filter];
+                return h ? (
+                  <div className="expert-help" style={{ marginTop: 6, flexBasis: "100%" }}>
+                    <div><strong>What it means.</strong> {h.info}</div>
+                    {h.fix && <div style={{ marginTop: 4 }}><strong>How to fix.</strong> {h.fix}</div>}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          )}
           {selected != null && (
             <input
               className="comment-bar"
@@ -496,6 +551,8 @@ export default function App() {
           <ExpertInfo
             engine={engine}
             enrich={enrich}
+            rules={expertRules}
+            onChange={changeExpert}
             onApplyFilter={applyFilter}
             onJump={(idx) => { selectPacket(idx); setOverlay(null); }}
             onClose={() => setOverlay(null)}

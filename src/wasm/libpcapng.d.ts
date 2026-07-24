@@ -40,6 +40,9 @@ export interface Conversation {
   portB: number;
   packets: number;
   bytes: number;
+  retransmissions: number;
+  dupAcks: number;
+  outOfOrder: number;
 }
 
 export interface Stream {

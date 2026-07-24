@@ -34,6 +34,9 @@ export default function Conversations({
                 <th>Port B</th>
                 <th className="num">Packets</th>
                 <th className="num">Bytes</th>
+                <th className="num" title="Retransmissions">Retr</th>
+                <th className="num" title="Duplicate ACKs">DupAck</th>
+                <th className="num" title="Out-of-order">OOO</th>
                 <th></th>
               </tr>
             </thead>
@@ -47,6 +50,9 @@ export default function Conversations({
                   <td className="num">{c.portB}</td>
                   <td className="num">{c.packets}</td>
                   <td className="num">{formatBytes(c.bytes)}</td>
+                  <td className="num" style={c.retransmissions ? { color: "#e8776b" } : undefined}>{c.retransmissions || ""}</td>
+                  <td className="num" style={c.dupAcks ? { color: "#e8a33d" } : undefined}>{c.dupAcks || ""}</td>
+                  <td className="num" style={c.outOfOrder ? { color: "#b98bff" } : undefined}>{c.outOfOrder || ""}</td>
                   <td>
                     <button className="btn small" onClick={() => onFollow(c.id)}>Follow</button>
                   </td>
