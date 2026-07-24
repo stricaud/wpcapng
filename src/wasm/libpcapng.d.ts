@@ -31,12 +31,54 @@ export interface PosaLoadResult {
   error: string;
 }
 
+export interface Conversation {
+  id: number; // representative packet index (pass to getStream)
+  proto: "TCP" | "UDP";
+  addrA: string;
+  portA: number;
+  addrB: string;
+  portB: number;
+  packets: number;
+  bytes: number;
+}
+
+export interface Stream {
+  ok: boolean;
+  proto: "TCP" | "UDP";
+  clientIp: string;
+  clientPort: number;
+  serverIp: string;
+  serverPort: number;
+  packets: number;
+  client: Uint8Array; // client → server bytes, reassembled
+  server: Uint8Array; // server → client bytes, reassembled
+  segments: StreamSegment[]; // interleaved chunks in arrival order
+}
+
+export interface StreamSegment {
+  dir: 0 | 1; // 0 = client→server, 1 = server→client
+  data: Uint8Array;
+}
+
+export interface ExtractedObject {
+  proto: string;
+  frame: number;
+  hostname: string;
+  contentType: string;
+  filename: string;
+  complete: boolean;
+  data: Uint8Array;
+}
+
 export interface LibpcapngModule {
   loadCapture(bytes: Uint8Array): number;
   getPacketCount(): number;
   getSummaries(): Summary[];
   getDetail(index: number): Field[] | null;
   getPacketBytes(index: number): Uint8Array | null;
+  getConversations(): Conversation[];
+  getStream(index: number): Stream | null;
+  extractObjects(proto: "http" | "smb"): ExtractedObject[];
   loadPosaText(src: string): PosaLoadResult;
   listPosa(): PosaInfo[];
   listProtocols(): string[];

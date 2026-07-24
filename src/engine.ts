@@ -8,4 +8,13 @@ export function getEngine(): Promise<LibpcapngModule> {
   return modPromise;
 }
 
-export type { Field, Summary, PosaInfo, PosaLoadResult, LibpcapngModule } from "./wasm/libpcapng";
+export type {
+  Field,
+  Summary,
+  PosaInfo,
+  PosaLoadResult,
+  Conversation,
+  Stream,
+  ExtractedObject,
+  LibpcapngModule,
+} from "./wasm/libpcapng";

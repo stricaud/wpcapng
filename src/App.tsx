@@ -1,10 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { getEngine, type Field, type LibpcapngModule, type Summary } from "./engine";
 import { applyStored, loadStored } from "./posaStore";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
-import PosaManager from "./components/PosaManager";
+import Menu from "./components/Menu";
+
+// Heavy / on-demand overlays are code-split so ECharts + fflate load lazily.
+const PosaManager = lazy(() => import("./components/PosaManager"));
+const FollowStream = lazy(() => import("./components/FollowStream"));
+const IOGraph = lazy(() => import("./components/IOGraph"));
+const Conversations = lazy(() => import("./components/Conversations"));
+const ExportObjects = lazy(() => import("./components/ExportObjects"));
+
+type Overlay =
+  | { kind: "follow"; index: number }
+  | { kind: "iograph" }
+  | { kind: "conversations" }
+  | { kind: "objects"; proto: "http" | "smb" }
+  | { kind: "posa" }
+  | null;
 
 export default function App() {
   const [engine, setEngine] = useState<LibpcapngModule | null>(null);
@@ -17,8 +32,9 @@ export default function App() {
   const [hover, setHover] = useState<[number, number] | null>(null);
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showPosa, setShowPosa] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const hasCapture = summaries.length > 0;
 
   // Boot the WASM engine and apply any saved posa decoders.
   useEffect(() => {
@@ -116,7 +132,28 @@ export default function App() {
             onChange={(e) => setFilter(e.target.value)}
             disabled={summaries.length === 0}
           />
-          <button className="btn" onClick={() => setShowPosa(true)} disabled={!engine}>
+          <button
+            className="btn"
+            disabled={selected == null}
+            onClick={() => selected != null && setOverlay({ kind: "follow", index: selected })}
+          >
+            Follow Stream
+          </button>
+          <Menu
+            label="Statistics"
+            items={[
+              { label: "IO Graph", onClick: () => setOverlay({ kind: "iograph" }), disabled: !hasCapture },
+              { label: "Conversations", onClick: () => setOverlay({ kind: "conversations" }), disabled: !hasCapture },
+            ]}
+          />
+          <Menu
+            label="Export"
+            items={[
+              { label: "HTTP Objects…", onClick: () => setOverlay({ kind: "objects", proto: "http" }), disabled: !hasCapture },
+              { label: "SMB Objects…", onClick: () => setOverlay({ kind: "objects", proto: "smb" }), disabled: !hasCapture },
+            ]}
+          />
+          <button className="btn" onClick={() => setOverlay({ kind: "posa" })} disabled={!engine}>
             Dissectors
           </button>
         </div>
@@ -163,19 +200,34 @@ export default function App() {
         </div>
       </div>
 
-      {showPosa && engine && (
-        <PosaManager
-          engine={engine}
-          onClose={() => setShowPosa(false)}
-          onChange={() => {
-            // re-dissect current selection so new decoders take effect
-            if (selected != null) {
-              setDetail(engine.getDetail(selected));
-            }
-            setSummaries(engine.getSummaries());
-          }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {engine && overlay?.kind === "posa" && (
+          <PosaManager
+            engine={engine}
+            onClose={() => setOverlay(null)}
+            onChange={() => {
+              if (selected != null) setDetail(engine.getDetail(selected));
+              setSummaries(engine.getSummaries());
+            }}
+          />
+        )}
+        {engine && overlay?.kind === "follow" && (
+          <FollowStream engine={engine} index={overlay.index} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "iograph" && (
+          <IOGraph summaries={summaries} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "conversations" && (
+          <Conversations
+            engine={engine}
+            onClose={() => setOverlay(null)}
+            onFollow={(idx) => setOverlay({ kind: "follow", index: idx })}
+          />
+        )}
+        {engine && overlay?.kind === "objects" && (
+          <ExportObjects engine={engine} proto={overlay.proto} onClose={() => setOverlay(null)} />
+        )}
+      </Suspense>
     </div>
   );
 }
