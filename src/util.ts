@@ -75,6 +75,17 @@ export function pickTextFile(accept: string): Promise<string | null> {
   });
 }
 
+// Decode bytes as JSON (tolerating pcapng trailing padding) and pretty-print.
+export function tryParseJson(bytes: Uint8Array): { pretty: string } | null {
+  let s = new TextDecoder().decode(bytes).replace(/^\0+/, "").replace(/[\s\0]+$/g, "");
+  if (!s || (s[0] !== "{" && s[0] !== "[")) return null;
+  try {
+    return { pretty: JSON.stringify(JSON.parse(s), null, 2) };
+  } catch {
+    return null;
+  }
+}
+
 // Make a filesystem-safe, unique object name (mirrors carscal's safe_name).
 export function safeName(filename: string, frame: number, i: number): string {
   const base = (filename.split(/[/\\]/).pop() ?? "").trim() || `frame-${frame}`;

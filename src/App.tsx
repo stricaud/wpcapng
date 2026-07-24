@@ -7,7 +7,7 @@ import { buildColumns, loadCols, loadTimeFormat, saveTimeFormat, type ColConfig,
 import { buildEnrich } from "./enrichment";
 import { loadGeo, type GeoDB } from "./geoip";
 import { EXPERT_HELP, SEVERITY_META, loadExpert, saveExpert, type ExpertRule } from "./expert";
-import { csvCell, download } from "./util";
+import { csvCell, download, tryParseJson } from "./util";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
@@ -231,6 +231,10 @@ export default function App() {
     () => (engine ? computeRowColors(engine, colorRules, summaries.length, enrich) : []),
     [engine, colorRules, summaries, enrich],
   );
+  const customJson = useMemo(() => {
+    if (selected == null || !bytes || summaries[selected]?.proto !== "PCAPNG") return null;
+    return tryParseJson(bytes);
+  }, [selected, bytes, summaries]);
   const insights = useMemo(() => {
     if (selected == null) return null;
     const color = rowColors[selected]?.rule ?? null;
@@ -479,6 +483,9 @@ export default function App() {
               value={comment}
               onChange={(e) => editComment(e.target.value)}
             />
+          )}
+          {customJson && (
+            <pre className="json-view">{customJson.pretty}</pre>
           )}
           <DetailTree
             layers={detail}
