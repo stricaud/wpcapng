@@ -82,6 +82,7 @@ export interface LibpcapngModule {
   validateFilter(expr: string): { ok: boolean; error: string };
   matchFilter(expr: string): Uint8Array; // 1 byte per packet
   matchFilters(exprs: string[]): Uint8Array[]; // one mask per expr
+  exportPcapng(indices: number[]): Uint8Array; // subset → new pcapng
 
   loadPosaText(src: string): PosaLoadResult;
   listPosa(): PosaInfo[];

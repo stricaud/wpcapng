@@ -36,6 +36,35 @@ body {
   height: 100vh;
 }
 
+/* drag-and-drop overlay */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 20, 30, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* let drag events fall through to .app */
+}
+.drop-box {
+  border: 3px dashed var(--accent-2);
+  border-radius: 14px;
+  padding: 48px 64px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--text);
+  background: rgba(20, 30, 40, 0.6);
+}
+.drop-box .drop-icon {
+  font-size: 56px;
+  margin-bottom: 12px;
+}
+.drop-box .dim {
+  font-size: 13px;
+  margin-top: 10px;
+}
+
 /* ── toolbar ─────────────────────────────────────────────────────────────── */
 .toolbar {
   display: flex;
@@ -157,9 +186,18 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.c-mark {
+  width: 18px;
+  text-align: center;
+  color: var(--hl);
+}
 .c-no {
   width: 64px;
   text-align: right;
+}
+.packet-list tbody tr.marked {
+  box-shadow: inset 3px 0 0 var(--hl);
+  font-weight: 600;
 }
 .c-time {
   width: 110px;
@@ -574,4 +612,34 @@ body {
 }
 .dim {
   color: var(--text-dim);
+}
+
+/* find dialog grid */
+.find-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+.find-grid label {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.find-grid .text-input {
+  margin-bottom: 0;
+}
+
+/* radio list (save-as) */
+.radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.radio-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }

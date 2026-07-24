@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Summary } from "../engine";
 
 // Subtle protocol-based row tint, à la Wireshark coloring rules.
@@ -16,17 +17,25 @@ function protoClass(proto: string): string {
 export default function PacketList({
   rows,
   selected,
+  marked,
   onSelect,
 }: {
   rows: { idx: number; s: Summary }[];
   selected: number | null;
+  marked: Set<number>;
   onSelect: (idx: number) => void;
 }) {
+  const selRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    selRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
   return (
     <div className="packet-list">
       <table>
         <thead>
           <tr>
+            <th className="c-mark"></th>
             <th className="c-no">No.</th>
             <th className="c-time">Time</th>
             <th className="c-addr">Source</th>
@@ -37,21 +46,26 @@ export default function PacketList({
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ idx, s }) => (
-            <tr
-              key={idx}
-              className={`${protoClass(s.proto)}${selected === idx ? " selected" : ""}`}
-              onClick={() => onSelect(idx)}
-            >
-              <td className="c-no">{s.no}</td>
-              <td className="c-time">{s.time.toFixed(6)}</td>
-              <td className="c-addr">{s.src}</td>
-              <td className="c-addr">{s.dst}</td>
-              <td className="c-proto">{s.proto}</td>
-              <td className="c-len">{s.length}</td>
-              <td className="c-info">{s.info}</td>
-            </tr>
-          ))}
+          {rows.map(({ idx, s }) => {
+            const isSel = selected === idx;
+            return (
+              <tr
+                key={idx}
+                ref={isSel ? selRef : undefined}
+                className={`${protoClass(s.proto)}${isSel ? " selected" : ""}${marked.has(idx) ? " marked" : ""}`}
+                onClick={() => onSelect(idx)}
+              >
+                <td className="c-mark">{marked.has(idx) ? "◆" : ""}</td>
+                <td className="c-no">{s.no}</td>
+                <td className="c-time">{s.time.toFixed(6)}</td>
+                <td className="c-addr">{s.src}</td>
+                <td className="c-addr">{s.dst}</td>
+                <td className="c-proto">{s.proto}</td>
+                <td className="c-len">{s.length}</td>
+                <td className="c-info">{s.info}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {rows.length === 0 && <div className="pane-empty">No packets</div>}

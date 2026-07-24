@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type DragEvent as RDrag } from "react";
 import { getEngine, type Field, type LibpcapngModule, type Summary } from "./engine";
 import { applyStored, loadStored } from "./posaStore";
+import { defaultFindParams, findPacket, type FindParams } from "./find";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
@@ -12,6 +13,9 @@ const FollowStream = lazy(() => import("./components/FollowStream"));
 const IOGraph = lazy(() => import("./components/IOGraph"));
 const Conversations = lazy(() => import("./components/Conversations"));
 const ExportObjects = lazy(() => import("./components/ExportObjects"));
+const FindDialog = lazy(() => import("./components/FindDialog"));
+const SaveAsDialog = lazy(() => import("./components/SaveAsDialog"));
+const GoToDialog = lazy(() => import("./components/GoToDialog"));
 
 type Overlay =
   | { kind: "follow"; index: number }
@@ -19,6 +23,9 @@ type Overlay =
   | { kind: "conversations" }
   | { kind: "objects"; proto: "http" | "smb" }
   | { kind: "posa" }
+  | { kind: "find" }
+  | { kind: "goto" }
+  | { kind: "saveas" }
   | null;
 
 export default function App() {
@@ -35,8 +42,49 @@ export default function App() {
   const [filterErr, setFilterErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [marked, setMarked] = useState<Set<number>>(new Set());
+  const [findParams, setFindParams] = useState<FindParams>(defaultFindParams);
+  const [findStatus, setFindStatus] = useState<string | null>(null);
+  const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasCapture = summaries.length > 0;
+
+  function toggleMark(idx: number) {
+    setMarked((m) => {
+      const n = new Set(m);
+      n.has(idx) ? n.delete(idx) : n.add(idx);
+      return n;
+    });
+  }
+
+  const hasFiles = (e: RDrag) => e.dataTransfer.types.includes("Files");
+
+  function onDragEnter(e: RDrag) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragActive(true);
+  }
+  function onDragOver(e: RDrag) {
+    if (hasFiles(e)) e.preventDefault(); // allow drop
+  }
+  function onDragLeave(e: RDrag) {
+    if (!hasFiles(e)) return;
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragActive(false);
+    }
+  }
+  function onDrop(e: RDrag) {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragActive(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) openFile(f);
+  }
 
   // Boot the WASM engine and apply any saved posa decoders.
   useEffect(() => {
@@ -61,6 +109,8 @@ export default function App() {
       setFilter("");
       setAppliedFilter("");
       setFilterErr(null);
+      setMarked(new Set());
+      setFindStatus(null);
     } finally {
       setBusy(false);
     }
@@ -105,8 +155,60 @@ export default function App() {
 
   const activeHighlight = hover ?? highlight;
 
+  function runFind(dir: 1 | -1) {
+    if (!engine) return;
+    const list = rows.map((r) => r.idx);
+    const found = findPacket(engine, summaries, list, selected, findParams, dir);
+    if (found == null) setFindStatus("No match");
+    else {
+      setFindStatus(null);
+      selectPacket(found);
+    }
+  }
+
+  function goToPacket(no: number) {
+    const idx = no - 1;
+    if (idx < 0 || idx >= summaries.length) return;
+    if (!rows.some((r) => r.idx === idx)) {
+      // reveal it if the current filter hides it
+      setFilter("");
+      setAppliedFilter("");
+    }
+    selectPacket(idx);
+  }
+
+  // Keyboard shortcuts (Wireshark-ish).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!engine) return;
+      if (meta && e.key.toLowerCase() === "f") { e.preventDefault(); setOverlay({ kind: "find" }); }
+      else if (e.key === "F3") { e.preventDefault(); runFind(e.shiftKey ? -1 : 1); }
+      else if (meta && e.key.toLowerCase() === "g") { e.preventDefault(); setOverlay({ kind: "goto" }); }
+      else if (meta && e.key.toLowerCase() === "m") { e.preventDefault(); if (selected != null) toggleMark(selected); }
+      else if (meta && e.key.toLowerCase() === "s") { e.preventDefault(); if (hasCapture) setOverlay({ kind: "saveas" }); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [engine, rows, selected, findParams, summaries, hasCapture]);
+
   return (
-    <div className="app">
+    <div
+      className="app"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {dragActive && (
+        <div className="drop-overlay">
+          <div className="drop-box">
+            <div className="drop-icon">🦈</div>
+            <div>Drop a <strong>.pcap</strong> / <strong>.pcapng</strong> to open</div>
+            <div className="dim">It stays in your browser — nothing is uploaded.</div>
+          </div>
+        </div>
+      )}
       <header className="toolbar">
         <div className="brand">
           <span className="logo">🦈</span>
@@ -158,6 +260,28 @@ export default function App() {
             Follow Stream
           </button>
           <Menu
+            label="File"
+            items={[
+              { label: "Open capture…", onClick: () => fileInput.current?.click(), disabled: !engine },
+              { label: "Save as / Export…  ⌘S", onClick: () => setOverlay({ kind: "saveas" }), disabled: !hasCapture },
+            ]}
+          />
+          <Menu
+            label="Edit"
+            items={[
+              { label: "Find…  ⌘F", onClick: () => setOverlay({ kind: "find" }), disabled: !hasCapture },
+              { label: "Find Next  F3", onClick: () => runFind(1), disabled: !hasCapture },
+              { label: "Find Previous  ⇧F3", onClick: () => runFind(-1), disabled: !hasCapture },
+              {
+                label: selected != null && marked.has(selected) ? "Unmark Packet  ⌘M" : "Mark Packet  ⌘M",
+                onClick: () => selected != null && toggleMark(selected),
+                disabled: selected == null,
+              },
+              { label: "Unmark All", onClick: () => setMarked(new Set()), disabled: marked.size === 0 },
+              { label: "Go to Packet…  ⌘G", onClick: () => setOverlay({ kind: "goto" }), disabled: !hasCapture },
+            ]}
+          />
+          <Menu
             label="Statistics"
             items={[
               { label: "IO Graph", onClick: () => setOverlay({ kind: "iograph" }), disabled: !hasCapture },
@@ -183,12 +307,14 @@ export default function App() {
         {fileName && (
           <span>
             <strong>{fileName}</strong> · {summaries.length} packets
-            {filter && ` · ${rows.length} shown`}
+            {appliedFilter && ` · ${rows.length} shown`}
+            {marked.size > 0 && ` · ${marked.size} marked`}
+            {findStatus && ` · ${findStatus}`}
           </span>
         )}
       </div>
 
-      <PacketList rows={rows} selected={selected} onSelect={selectPacket} />
+      <PacketList rows={rows} selected={selected} marked={marked} onSelect={selectPacket} />
 
       <div className="lower">
         <div className="pane detail-pane">
@@ -244,6 +370,28 @@ export default function App() {
         )}
         {engine && overlay?.kind === "objects" && (
           <ExportObjects engine={engine} proto={overlay.proto} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "find" && (
+          <FindDialog
+            params={findParams}
+            setParams={setFindParams}
+            onFind={runFind}
+            onClose={() => setOverlay(null)}
+            status={findStatus}
+          />
+        )}
+        {engine && overlay?.kind === "goto" && (
+          <GoToDialog max={summaries.length} onGo={goToPacket} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "saveas" && (
+          <SaveAsDialog
+            engine={engine}
+            total={summaries.length}
+            displayed={rows.map((r) => r.idx)}
+            marked={[...marked].sort((a, b) => a - b)}
+            selected={selected}
+            onClose={() => setOverlay(null)}
+          />
         )}
       </Suspense>
     </div>
