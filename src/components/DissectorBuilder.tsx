@@ -26,7 +26,21 @@ const TYPES: TType[] = [
 const TT = (k: string) => TYPES.find((t) => t.key === k)!;
 
 interface Enum { name: string; value: string }
-interface BField { name: string; type: string; n: number; label: string; ref?: string; enums: Enum[]; value?: number }
+interface Guard { ref: string; op: string; value: string }
+interface BField { name: string; type: string; n: number; label: string; ref?: string; enums: Enum[]; value?: number; guard?: Guard }
+
+const OPS = ["==", "!=", "<", ">", ">=", "<="];
+function cmp(a: number, op: string, b: number): boolean {
+  switch (op) {
+    case "==": return a === b;
+    case "!=": return a !== b;
+    case "<": return a < b;
+    case ">": return a > b;
+    case ">=": return a >= b;
+    case "<=": return a <= b;
+    default: return false;
+  }
+}
 
 const hx = (b: number) => b.toString(16).padStart(2, "0");
 
@@ -94,6 +108,9 @@ export default function DissectorBuilder({
   const [enums, setEnums] = useState<Enum[]>([]);
   const [enName, setEnName] = useState("");
   const [enVal, setEnVal] = useState("");
+  const [guardRef, setGuardRef] = useState("");
+  const [guardOp, setGuardOp] = useState("==");
+  const [guardVal, setGuardVal] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const consumed = fields.reduce((s, f) => s + f.n, 0);
@@ -101,8 +118,16 @@ export default function DissectorBuilder({
   const t = TT(type);
   const intFields = fields.filter((f) => TT(f.type).int);
 
+  // Does the draft's `when` guard hold for this example packet?
+  const guardActive = guardRef !== "" && guardVal !== "";
+  const guardHolds = (() => {
+    if (!guardActive) return true;
+    const rv = fields.find((f) => f.name === guardRef)?.value;
+    return rv != null && cmp(rv, guardOp, Number(guardVal));
+  })();
+
   // Concrete size of the draft field against this example packet.
-  const draftSize = (() => {
+  const baseSize = (() => {
     if (t.size) return t.size;
     if (t.kind === "sized") return Math.max(1, Math.min(n, remaining));
     if (t.kind === "cstring") {
@@ -116,6 +141,7 @@ export default function DissectorBuilder({
     }
     return 0;
   })();
+  const draftSize = guardActive && !guardHolds ? 0 : baseSize;
   const draftBytes = payload.subarray(consumed, consumed + draftSize);
 
   const addField = () => {
@@ -124,11 +150,13 @@ export default function DissectorBuilder({
     const nm = fname.replace(/[^A-Za-z0-9_]/g, "_") || `field${fields.length + 1}`;
     const f: BField = {
       name: nm, type, n: draftSize, label: flabel, ref: t.kind === "ref" ? ref : undefined,
-      enums: t.int ? enums : [], value: t.int ? intVal(draftBytes, type) : undefined,
+      enums: t.int ? enums : [], value: t.int && draftSize > 0 ? intVal(draftBytes, type) : undefined,
+      guard: guardActive ? { ref: guardRef, op: guardOp, value: guardVal } : undefined,
     };
     setFields((fs) => [...fs, f]);
     setFname(`field${fields.length + 2}`);
-    setFlabel(""); setEnums([]); setEnName(""); setEnVal(""); setMsg(null);
+    setFlabel(""); setEnums([]); setEnName(""); setEnVal("");
+    setGuardRef(""); setGuardVal(""); setMsg(null);
   };
 
   const source = useMemo(() => {
@@ -142,8 +170,10 @@ export default function DissectorBuilder({
       : f.type;
     const lines = [`Object<main> ${N}`, `    col "${display || N}"`, `    abbrev "${abbrev || N.toLowerCase()}"`];
     for (const f of fields) {
-      lines.push(`    required ${posaType(f)} ${safe(f.name)}${f.label ? ` "${f.label}"` : ""}`);
-      for (const e of f.enums) if (e.name.trim()) lines.push(`        ${safe(e.name)} = ${e.value}`);
+      const ind = f.guard ? "        " : "    ";
+      if (f.guard) lines.push(`    when ${safe(f.guard.ref)} ${f.guard.op} ${f.guard.value}:`);
+      lines.push(`${ind}required ${posaType(f)} ${safe(f.name)}${f.label ? ` "${f.label}"` : ""}`);
+      for (const e of f.enums) if (e.name.trim()) lines.push(`${ind}    ${safe(e.name)} = ${e.value}`);
     }
     if (port > 0) lines.push(`rule ${proto}.port == ${port} => ${N}`);
     return lines.join("\n") + "\n";
@@ -216,9 +246,28 @@ export default function DissectorBuilder({
               </div>
             )}
 
+            {intFields.length > 0 && (
+              <div className="fs-toolbar" style={{ flexWrap: "wrap" }}>
+                <span className="dim">Only when (optional):</span>
+                <select className="sel" value={guardRef} onChange={(e) => setGuardRef(e.target.value)}>
+                  <option value="">— always —</option>
+                  {intFields.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
+                </select>
+                {guardActive && (
+                  <>
+                    <select className="sel" value={guardOp} onChange={(e) => setGuardOp(e.target.value)}>
+                      {OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    <input className="text-input compact" style={{ width: 70 }} placeholder="value" value={guardVal} onChange={(e) => setGuardVal(e.target.value)} />
+                    <span className="dim">{guardHolds ? "holds for this packet" : "false here → 0 bytes"}</span>
+                  </>
+                )}
+              </div>
+            )}
+
             {fields.length > 0 && (
               <table className="io-rows">
-                <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Bytes</th><th>Label</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Bytes</th><th>When</th><th>Label</th><th></th></tr></thead>
                 <tbody>
                   {fields.map((f, i) => (
                     <tr key={i}>
@@ -226,6 +275,7 @@ export default function DissectorBuilder({
                       <td className="mono">{f.name}{f.enums.length ? ` {${f.enums.length}}` : ""}</td>
                       <td className="mono">{f.type === "bytes_ref" ? `bytes[${f.ref}]` : f.type === "str_ref" ? `str[${f.ref}]` : f.type === "bytes" || f.type === "str" ? `${f.type}<${f.n}>` : f.type}</td>
                       <td className="num">{f.n}</td>
+                      <td className="mono dim">{f.guard ? `${f.guard.ref} ${f.guard.op} ${f.guard.value}` : ""}</td>
                       <td>{f.label}</td>
                       <td><button className="btn small" onClick={() => setFields((fs) => fs.filter((_, k) => k !== i))}>✕</button></td>
                     </tr>

@@ -3,6 +3,8 @@ import { getEngine, type Field, type LibpcapngModule, type Summary } from "./eng
 import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
 import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
+import { loadCols, resolveColumns, type ColConfig } from "./columns";
+import { csvCell, download } from "./util";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
@@ -22,6 +24,8 @@ const EntityExplorer = lazy(() => import("./components/EntityExplorer"));
 const ProtocolHierarchy = lazy(() => import("./components/ProtocolHierarchy"));
 const ColoringRules = lazy(() => import("./components/ColoringRules"));
 const DissectorBuilder = lazy(() => import("./components/DissectorBuilder"));
+const ColumnsDialog = lazy(() => import("./components/ColumnsDialog"));
+const DecodeAsDialog = lazy(() => import("./components/DecodeAsDialog"));
 
 type Overlay =
   | { kind: "follow"; index: number }
@@ -34,6 +38,8 @@ type Overlay =
   | { kind: "objects"; proto: "http" | "smb" }
   | { kind: "posa" }
   | { kind: "builder"; index: number }
+  | { kind: "columns" }
+  | { kind: "decodeas" }
   | { kind: "find" }
   | { kind: "goto" }
   | { kind: "saveas" }
@@ -58,6 +64,8 @@ export default function App() {
   const [findParams, setFindParams] = useState<FindParams>(defaultFindParams);
   const [findStatus, setFindStatus] = useState<string | null>(null);
   const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
+  const [colConfig, setColConfig] = useState<ColConfig[]>(loadCols());
+  const columns = useMemo(() => resolveColumns(colConfig), [colConfig]);
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasCapture = summaries.length > 0;
@@ -184,6 +192,26 @@ export default function App() {
     }
   }
 
+  function applyFilter(expr: string) {
+    setFilter(expr);
+    setFilterErr(null);
+    setAppliedFilter(expr);
+    setOverlay(null);
+  }
+
+  function exportSummary(fmt: "csv" | "json") {
+    const list = rows.map((r) => r.s);
+    if (fmt === "json") {
+      download("packets.json", JSON.stringify(list, null, 2), "application/json");
+      return;
+    }
+    const header = ["No.", "Time", "Source", "Destination", "Protocol", "Length", "Info"];
+    const lines = [header.join(",")];
+    for (const s of list)
+      lines.push([s.no, s.time.toFixed(6), s.src, s.dst, s.proto, s.length, s.info].map(csvCell).join(","));
+    download("packets.csv", lines.join("\n"), "text/csv");
+  }
+
   function goToPacket(no: number) {
     const idx = no - 1;
     if (idx < 0 || idx >= summaries.length) return;
@@ -282,6 +310,8 @@ export default function App() {
             items={[
               { label: "Open capture…", onClick: () => fileInput.current?.click(), disabled: !engine },
               { label: "Save as / Export…  ⌘S", onClick: () => setOverlay({ kind: "saveas" }), disabled: !hasCapture },
+              { label: "Export summary (CSV)", onClick: () => exportSummary("csv"), disabled: !hasCapture },
+              { label: "Export summary (JSON)", onClick: () => exportSummary("json"), disabled: !hasCapture },
             ]}
           />
           <Menu
@@ -313,6 +343,7 @@ export default function App() {
             label="View"
             items={[
               { label: "Coloring Rules…", onClick: () => setOverlay({ kind: "coloring" }), disabled: !engine },
+              { label: "Columns…", onClick: () => setOverlay({ kind: "columns" }), disabled: !engine },
             ]}
           />
           <Menu
@@ -330,6 +361,7 @@ export default function App() {
                 onClick: () => selected != null && setOverlay({ kind: "builder", index: selected }),
                 disabled: selected == null,
               },
+              { label: "Decode As…", onClick: () => setOverlay({ kind: "decodeas" }), disabled: !hasCapture },
               { label: "Manage Dissectors…", onClick: () => setOverlay({ kind: "posa" }), disabled: !engine },
             ]}
           />
@@ -349,7 +381,7 @@ export default function App() {
         )}
       </div>
 
-      <PacketList rows={rows} selected={selected} marked={marked} colors={rowColors} onSelect={selectPacket} />
+      <PacketList rows={rows} selected={selected} marked={marked} colors={rowColors} columns={columns} onSelect={selectPacket} />
 
       <div className="lower">
         <div className="pane detail-pane">
@@ -410,7 +442,12 @@ export default function App() {
           <EntityExplorer engine={engine} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "hierarchy" && (
-          <ProtocolHierarchy engine={engine} total={summaries.length} onClose={() => setOverlay(null)} />
+          <ProtocolHierarchy
+            engine={engine}
+            total={summaries.length}
+            onApplyFilter={applyFilter}
+            onClose={() => setOverlay(null)}
+          />
         )}
         {engine && overlay?.kind === "coloring" && (
           <ColoringRules engine={engine} rules={colorRules} onChange={setColorRules} onClose={() => setOverlay(null)} />
@@ -419,6 +456,20 @@ export default function App() {
           <DissectorBuilder
             engine={engine}
             index={overlay.index}
+            onClose={() => setOverlay(null)}
+            onSaved={() => {
+              if (selected != null) setDetail(engine.getDetail(selected));
+              setSummaries(engine.getSummaries());
+            }}
+          />
+        )}
+        {engine && overlay?.kind === "columns" && (
+          <ColumnsDialog cols={colConfig} onChange={setColConfig} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "decodeas" && (
+          <DecodeAsDialog
+            engine={engine}
+            index={selected}
             onClose={() => setOverlay(null)}
             onSaved={() => {
               if (selected != null) setDetail(engine.getDetail(selected));

@@ -2,18 +2,32 @@ import { useMemo } from "react";
 import type { HierarchyNode, LibpcapngModule } from "../engine";
 import { formatBytes } from "../util";
 
-function Row({ node, depth, total }: { node: HierarchyNode; depth: number; total: number }) {
+function Row({
+  node,
+  depth,
+  total,
+  onApply,
+}: {
+  node: HierarchyNode;
+  depth: number;
+  total: number;
+  onApply: (abbrev: string) => void;
+}) {
   const pct = total > 0 ? (node.packets / total) * 100 : 0;
   return (
     <>
-      <tr>
+      <tr
+        style={{ cursor: node.abbrev && node.abbrev !== "frame" ? "pointer" : "default" }}
+        title={node.abbrev && node.abbrev !== "frame" ? `Apply "${node.abbrev}" as filter` : ""}
+        onClick={() => node.abbrev && node.abbrev !== "frame" && onApply(node.abbrev)}
+      >
         <td style={{ paddingLeft: depth * 18 + 8 }}>{node.name || node.abbrev}</td>
         <td className="num">{pct.toFixed(1)}%</td>
         <td className="num">{node.packets}</td>
         <td className="num">{formatBytes(node.bytes)}</td>
       </tr>
       {node.children.map((c, i) => (
-        <Row key={c.abbrev + i} node={c} depth={depth + 1} total={total} />
+        <Row key={c.abbrev + i} node={c} depth={depth + 1} total={total} onApply={onApply} />
       ))}
     </>
   );
@@ -22,10 +36,12 @@ function Row({ node, depth, total }: { node: HierarchyNode; depth: number; total
 export default function ProtocolHierarchy({
   engine,
   total,
+  onApplyFilter,
   onClose,
 }: {
   engine: LibpcapngModule;
   total: number;
+  onApplyFilter: (abbrev: string) => void;
   onClose: () => void;
 }) {
   const tree = useMemo(() => engine.getProtocolHierarchy(), [engine]);
@@ -49,7 +65,7 @@ export default function ProtocolHierarchy({
             </thead>
             <tbody>
               {tree.map((n, i) => (
-                <Row key={n.abbrev + i} node={n} depth={0} total={total} />
+                <Row key={n.abbrev + i} node={n} depth={0} total={total} onApply={onApplyFilter} />
               ))}
             </tbody>
           </table>

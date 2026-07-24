@@ -54,6 +54,12 @@ export function toHexDump(bytes: Uint8Array): string {
   return lines.join("\n");
 }
 
+// CSV cell escaping.
+export function csvCell(v: string | number): string {
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 // Prompt the user to pick a file and return its text.
 export function pickTextFile(accept: string): Promise<string | null> {
   return new Promise((resolve) => {

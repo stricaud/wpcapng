@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Summary } from "../engine";
 import type { RowColor } from "../coloring";
+import type { ColumnDef } from "../columns";
 
 // Subtle protocol-based row tint, à la Wireshark coloring rules.
 function protoClass(proto: string): string {
@@ -20,12 +21,14 @@ export default function PacketList({
   selected,
   marked,
   colors,
+  columns,
   onSelect,
 }: {
   rows: { idx: number; s: Summary }[];
   selected: number | null;
   marked: Set<number>;
   colors: RowColor[];
+  columns: ColumnDef[];
   onSelect: (idx: number) => void;
 }) {
   const selRef = useRef<HTMLTableRowElement>(null);
@@ -39,13 +42,9 @@ export default function PacketList({
         <thead>
           <tr>
             <th className="c-mark"></th>
-            <th className="c-no">No.</th>
-            <th className="c-time">Time</th>
-            <th className="c-addr">Source</th>
-            <th className="c-addr">Destination</th>
-            <th className="c-proto">Protocol</th>
-            <th className="c-len">Length</th>
-            <th className="c-info">Info</th>
+            {columns.map((c) => (
+              <th key={c.key} className={c.className}>{c.label}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -61,13 +60,9 @@ export default function PacketList({
                 onClick={() => onSelect(idx)}
               >
                 <td className="c-mark">{marked.has(idx) ? "◆" : ""}</td>
-                <td className="c-no">{s.no}</td>
-                <td className="c-time">{s.time.toFixed(6)}</td>
-                <td className="c-addr">{s.src}</td>
-                <td className="c-addr">{s.dst}</td>
-                <td className="c-proto">{s.proto}</td>
-                <td className="c-len">{s.length}</td>
-                <td className="c-info">{s.info}</td>
+                {columns.map((col) => (
+                  <td key={col.key} className={col.className}>{col.render(s)}</td>
+                ))}
               </tr>
             );
           })}
