@@ -60,6 +60,24 @@ export interface StreamSegment {
   data: Uint8Array;
 }
 
+export interface Endpoint {
+  address: string;
+  packets: number;
+  bytes: number;
+  txPackets: number;
+  txBytes: number;
+  rxPackets: number;
+  rxBytes: number;
+}
+
+export interface HierarchyNode {
+  abbrev: string;
+  name: string;
+  packets: number;
+  bytes: number;
+  children: HierarchyNode[];
+}
+
 export interface ExtractedObject {
   proto: string;
   frame: number;
@@ -77,6 +95,8 @@ export interface LibpcapngModule {
   getDetail(index: number): Field[] | null;
   getPacketBytes(index: number): Uint8Array | null;
   getConversations(): Conversation[];
+  getEndpoints(): Endpoint[];
+  getProtocolHierarchy(): HierarchyNode[];
   getStream(index: number): Stream | null;
   extractObjects(proto: "http" | "smb"): ExtractedObject[];
   validateFilter(expr: string): { ok: boolean; error: string };

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Summary } from "../engine";
+import type { RowColor } from "../coloring";
 
 // Subtle protocol-based row tint, à la Wireshark coloring rules.
 function protoClass(proto: string): string {
@@ -18,11 +19,13 @@ export default function PacketList({
   rows,
   selected,
   marked,
+  colors,
   onSelect,
 }: {
   rows: { idx: number; s: Summary }[];
   selected: number | null;
   marked: Set<number>;
+  colors: RowColor[];
   onSelect: (idx: number) => void;
 }) {
   const selRef = useRef<HTMLTableRowElement>(null);
@@ -48,11 +51,13 @@ export default function PacketList({
         <tbody>
           {rows.map(({ idx, s }) => {
             const isSel = selected === idx;
+            const c = colors[idx];
             return (
               <tr
                 key={idx}
                 ref={isSel ? selRef : undefined}
-                className={`${protoClass(s.proto)}${isSel ? " selected" : ""}${marked.has(idx) ? " marked" : ""}`}
+                className={`${c ? "" : protoClass(s.proto)}${isSel ? " selected" : ""}${marked.has(idx) ? " marked" : ""}`}
+                style={c && !isSel ? { background: c.bg, color: c.fg } : undefined}
                 onClick={() => onSelect(idx)}
               >
                 <td className="c-mark">{marked.has(idx) ? "◆" : ""}</td>

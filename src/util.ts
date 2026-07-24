@@ -54,6 +54,21 @@ export function toHexDump(bytes: Uint8Array): string {
   return lines.join("\n");
 }
 
+// Prompt the user to pick a file and return its text.
+export function pickTextFile(accept: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.onchange = () => {
+      const f = input.files?.[0];
+      if (!f) return resolve(null);
+      f.text().then(resolve).catch(() => resolve(null));
+    };
+    input.click();
+  });
+}
+
 // Make a filesystem-safe, unique object name (mirrors carscal's safe_name).
 export function safeName(filename: string, frame: number, i: number): string {
   const base = (filename.split(/[/\\]/).pop() ?? "").trim() || `frame-${frame}`;

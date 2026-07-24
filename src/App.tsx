@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState, type DragEvent as
 import { getEngine, type Field, type LibpcapngModule, type Summary } from "./engine";
 import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
+import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
@@ -16,13 +17,23 @@ const ExportObjects = lazy(() => import("./components/ExportObjects"));
 const FindDialog = lazy(() => import("./components/FindDialog"));
 const SaveAsDialog = lazy(() => import("./components/SaveAsDialog"));
 const GoToDialog = lazy(() => import("./components/GoToDialog"));
+const Endpoints = lazy(() => import("./components/Endpoints"));
+const EntityExplorer = lazy(() => import("./components/EntityExplorer"));
+const ProtocolHierarchy = lazy(() => import("./components/ProtocolHierarchy"));
+const ColoringRules = lazy(() => import("./components/ColoringRules"));
+const DissectorBuilder = lazy(() => import("./components/DissectorBuilder"));
 
 type Overlay =
   | { kind: "follow"; index: number }
   | { kind: "iograph" }
   | { kind: "conversations" }
+  | { kind: "endpoints" }
+  | { kind: "entities" }
+  | { kind: "hierarchy" }
+  | { kind: "coloring" }
   | { kind: "objects"; proto: "http" | "smb" }
   | { kind: "posa" }
+  | { kind: "builder"; index: number }
   | { kind: "find" }
   | { kind: "goto" }
   | { kind: "saveas" }
@@ -46,6 +57,7 @@ export default function App() {
   const [marked, setMarked] = useState<Set<number>>(new Set());
   const [findParams, setFindParams] = useState<FindParams>(defaultFindParams);
   const [findStatus, setFindStatus] = useState<string | null>(null);
+  const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasCapture = summaries.length > 0;
@@ -154,6 +166,12 @@ export default function App() {
   }, [summaries, appliedFilter, engine]);
 
   const activeHighlight = hover ?? highlight;
+
+  // Per-packet coloring from the coloring rules (first match wins).
+  const rowColors = useMemo(
+    () => (engine ? computeRowColors(engine, colorRules, summaries.length) : []),
+    [engine, colorRules, summaries],
+  );
 
   function runFind(dir: 1 | -1) {
     if (!engine) return;
@@ -286,6 +304,15 @@ export default function App() {
             items={[
               { label: "IO Graph", onClick: () => setOverlay({ kind: "iograph" }), disabled: !hasCapture },
               { label: "Conversations", onClick: () => setOverlay({ kind: "conversations" }), disabled: !hasCapture },
+              { label: "Endpoints", onClick: () => setOverlay({ kind: "endpoints" }), disabled: !hasCapture },
+              { label: "Protocol Hierarchy", onClick: () => setOverlay({ kind: "hierarchy" }), disabled: !hasCapture },
+              { label: "Entity Explorer", onClick: () => setOverlay({ kind: "entities" }), disabled: !hasCapture },
+            ]}
+          />
+          <Menu
+            label="View"
+            items={[
+              { label: "Coloring Rules…", onClick: () => setOverlay({ kind: "coloring" }), disabled: !engine },
             ]}
           />
           <Menu
@@ -295,9 +322,17 @@ export default function App() {
               { label: "SMB Objects…", onClick: () => setOverlay({ kind: "objects", proto: "smb" }), disabled: !hasCapture },
             ]}
           />
-          <button className="btn" onClick={() => setOverlay({ kind: "posa" })} disabled={!engine}>
-            Dissectors
-          </button>
+          <Menu
+            label="Tools"
+            items={[
+              {
+                label: "Build Dissector from selected…",
+                onClick: () => selected != null && setOverlay({ kind: "builder", index: selected }),
+                disabled: selected == null,
+              },
+              { label: "Manage Dissectors…", onClick: () => setOverlay({ kind: "posa" }), disabled: !engine },
+            ]}
+          />
         </div>
       </header>
 
@@ -314,7 +349,7 @@ export default function App() {
         )}
       </div>
 
-      <PacketList rows={rows} selected={selected} marked={marked} onSelect={selectPacket} />
+      <PacketList rows={rows} selected={selected} marked={marked} colors={rowColors} onSelect={selectPacket} />
 
       <div className="lower">
         <div className="pane detail-pane">
@@ -366,6 +401,29 @@ export default function App() {
             engine={engine}
             onClose={() => setOverlay(null)}
             onFollow={(idx) => setOverlay({ kind: "follow", index: idx })}
+          />
+        )}
+        {engine && overlay?.kind === "endpoints" && (
+          <Endpoints engine={engine} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "entities" && (
+          <EntityExplorer engine={engine} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "hierarchy" && (
+          <ProtocolHierarchy engine={engine} total={summaries.length} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "coloring" && (
+          <ColoringRules engine={engine} rules={colorRules} onChange={setColorRules} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "builder" && (
+          <DissectorBuilder
+            engine={engine}
+            index={overlay.index}
+            onClose={() => setOverlay(null)}
+            onSaved={() => {
+              if (selected != null) setDetail(engine.getDetail(selected));
+              setSummaries(engine.getSummaries());
+            }}
           />
         )}
         {engine && overlay?.kind === "objects" && (

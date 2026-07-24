@@ -14,6 +14,8 @@ export type {
   PosaInfo,
   PosaLoadResult,
   Conversation,
+  Endpoint,
+  HierarchyNode,
   Stream,
   ExtractedObject,
   LibpcapngModule,

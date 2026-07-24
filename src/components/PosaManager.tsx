@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { LibpcapngModule, PosaInfo } from "../engine";
 import { type StoredPosa, loadStored, saveStored } from "../posaStore";
+import { download, pickTextFile } from "../util";
 
 const EXAMPLE = `# Example declarative (posa) dissector.
 # See libpcapng's posa docs for the full syntax.
@@ -46,6 +47,30 @@ export default function PosaManager({
     onChange();
   }
 
+  async function importFile() {
+    const text = await pickTextFile("application/json,.json");
+    if (!text) return;
+    try {
+      const items = JSON.parse(text) as StoredPosa[];
+      if (!Array.isArray(items)) return;
+      const byId = new Map(stored.map((s) => [s.id, s]));
+      let loaded = 0;
+      for (const it of items) {
+        if (!it.source) continue;
+        const res = engine.loadPosaText(it.source);
+        if (res.ok) loaded++;
+        byId.set(it.id ?? `${Date.now()}-${loaded}`, it);
+      }
+      const next = [...byId.values()];
+      setStored(next);
+      saveStored(next);
+      setMsg({ ok: true, text: `Imported ${items.length}, loaded ${loaded}.` });
+      onChange();
+    } catch {
+      setMsg({ ok: false, text: "Invalid dissector file." });
+    }
+  }
+
   function remove(id: string) {
     const next = stored.filter((s) => s.id !== id);
     setStored(next);
@@ -62,6 +87,17 @@ export default function PosaManager({
           <button className="btn" onClick={onClose}>
             ✕
           </button>
+        </div>
+
+        <div className="fs-toolbar">
+          <button
+            className="btn"
+            disabled={stored.length === 0}
+            onClick={() => download("dissectors.json", JSON.stringify(stored, null, 2), "application/json")}
+          >
+            Export all
+          </button>
+          <button className="btn" onClick={importFile}>Import…</button>
         </div>
 
         <section>

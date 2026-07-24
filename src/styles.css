@@ -525,6 +525,17 @@ body {
   border-color: #d9534f;
   background: #2a1c1c;
 }
+/* dissector builder payload map */
+.db-done {
+  color: var(--text-dim);
+  opacity: 0.45;
+}
+.db-next {
+  background: var(--hl);
+  color: #000;
+  border-radius: 2px;
+}
+
 .io-rows input[type="color"] {
   width: 34px;
   height: 26px;
