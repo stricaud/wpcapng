@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, type DragEvent as RDrag } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { getEngine, type Field, type LibpcapngModule, type Summary } from "./engine";
 import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
@@ -68,10 +68,10 @@ export default function App() {
   const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
   const [colConfig, setColConfig] = useState<ColConfig[]>(loadCols());
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(loadTimeFormat());
-  const startTime = useMemo(() => (engine ? engine.getStartTime() : 0), [engine, summaries]);
+  const startTime = useMemo(() => engine?.getStartTime?.() ?? 0, [engine, summaries]);
   const customValues = useMemo(() => {
     const m: Record<string, string[]> = {};
-    if (engine)
+    if (engine?.getFieldColumn)
       for (const c of colConfig)
         if (c.visible && c.key.startsWith("custom:") && c.abbrev) m[c.key] = engine.getFieldColumn(c.abbrev);
     return m;
@@ -81,7 +81,6 @@ export default function App() {
     [colConfig, timeFormat, startTime, summaries, customValues],
   );
   const setTimeFmt = (f: TimeFormat) => { setTimeFormat(f); saveTimeFormat(f); };
-  const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasCapture = summaries.length > 0;
 
@@ -93,34 +92,6 @@ export default function App() {
     });
   }
 
-  const hasFiles = (e: RDrag) => e.dataTransfer.types.includes("Files");
-
-  function onDragEnter(e: RDrag) {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth.current += 1;
-    setDragActive(true);
-  }
-  function onDragOver(e: RDrag) {
-    if (hasFiles(e)) e.preventDefault(); // allow drop
-  }
-  function onDragLeave(e: RDrag) {
-    if (!hasFiles(e)) return;
-    dragDepth.current -= 1;
-    if (dragDepth.current <= 0) {
-      dragDepth.current = 0;
-      setDragActive(false);
-    }
-  }
-  function onDrop(e: RDrag) {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth.current = 0;
-    setDragActive(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f) openFile(f);
-  }
-
   // Boot the WASM engine and apply any saved posa decoders.
   useEffect(() => {
     getEngine().then((m) => {
@@ -128,6 +99,29 @@ export default function App() {
       setEngine(m);
     });
   }, []);
+
+  // Window-level drag & drop — robust regardless of the pane/overlay layout.
+  useEffect(() => {
+    if (!engine) return;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    const onOver = (e: DragEvent) => { if (hasFiles(e)) { e.preventDefault(); setDragActive(true); } };
+    const onLeave = (e: DragEvent) => { if (e.relatedTarget === null) setDragActive(false); };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setDragActive(false);
+      const f = e.dataTransfer?.files?.[0];
+      if (f) openFile(f);
+    };
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [engine]);
 
   async function openFile(file: File) {
     if (!engine) return;
@@ -146,8 +140,11 @@ export default function App() {
       setFilterErr(null);
       setMarked(new Set());
       setComment("");
-      setCommented(new Set(engine.getCommentedPackets()));
+      setCommented(new Set(engine.getCommentedPackets?.() ?? []));
       setFindStatus(null);
+    } catch (err) {
+      console.error("Failed to open capture:", err);
+      alert(`Failed to open ${file.name}: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -268,13 +265,7 @@ export default function App() {
   }, [engine, rows, selected, findParams, summaries, hasCapture]);
 
   return (
-    <div
-      className="app"
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+    <div className="app">
       {dragActive && (
         <div className="drop-overlay">
           <div className="drop-box">
