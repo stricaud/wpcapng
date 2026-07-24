@@ -12,29 +12,33 @@ import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
 import HexView from "./components/HexView";
 import Menu from "./components/Menu";
+// Small overlays are eager (no code-split) so they never fail to load a chunk.
+import PosaManager from "./components/PosaManager";
+import FollowStream from "./components/FollowStream";
+import Conversations from "./components/Conversations";
+import FindDialog from "./components/FindDialog";
+import SaveAsDialog from "./components/SaveAsDialog";
+import GoToDialog from "./components/GoToDialog";
+import Endpoints from "./components/Endpoints";
+import ProtocolHierarchy from "./components/ProtocolHierarchy";
+import ExpertInfo from "./components/ExpertInfo";
+import ColoringRules from "./components/ColoringRules";
+import DissectorBuilder from "./components/DissectorBuilder";
+import ColumnsDialog from "./components/ColumnsDialog";
+import DecodeAsDialog from "./components/DecodeAsDialog";
 
-// Heavy / on-demand overlays are code-split so ECharts + fflate load lazily.
-const PosaManager = lazy(() => import("./components/PosaManager"));
-const FollowStream = lazy(() => import("./components/FollowStream"));
+// Heavy views (ECharts / fflate) stay code-split.
 const IOGraph = lazy(() => import("./components/IOGraph"));
-const Conversations = lazy(() => import("./components/Conversations"));
 const ExportObjects = lazy(() => import("./components/ExportObjects"));
-const FindDialog = lazy(() => import("./components/FindDialog"));
-const SaveAsDialog = lazy(() => import("./components/SaveAsDialog"));
-const GoToDialog = lazy(() => import("./components/GoToDialog"));
-const Endpoints = lazy(() => import("./components/Endpoints"));
 const EntityExplorer = lazy(() => import("./components/EntityExplorer"));
-const ProtocolHierarchy = lazy(() => import("./components/ProtocolHierarchy"));
 const StreamGraph = lazy(() => import("./components/StreamGraph"));
 const ProtocolCharts = lazy(() => import("./components/ProtocolCharts"));
 const FlowCharts = lazy(() => import("./components/FlowCharts"));
 const Distributions = lazy(() => import("./components/Distributions"));
-const ExpertInfo = lazy(() => import("./components/ExpertInfo"));
 const GeoMap = lazy(() => import("./components/GeoMap"));
-const ColoringRules = lazy(() => import("./components/ColoringRules"));
-const DissectorBuilder = lazy(() => import("./components/DissectorBuilder"));
-const ColumnsDialog = lazy(() => import("./components/ColumnsDialog"));
-const DecodeAsDialog = lazy(() => import("./components/DecodeAsDialog"));
+
+
+// Heavy / on-demand overlays are code-split so ECharts + fflate load lazily.
 
 type Overlay =
   | { kind: "follow"; index: number }
