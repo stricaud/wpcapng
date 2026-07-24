@@ -26,6 +26,8 @@ const StreamGraph = lazy(() => import("./components/StreamGraph"));
 const ProtocolCharts = lazy(() => import("./components/ProtocolCharts"));
 const FlowCharts = lazy(() => import("./components/FlowCharts"));
 const Distributions = lazy(() => import("./components/Distributions"));
+const ExpertInfo = lazy(() => import("./components/ExpertInfo"));
+const GeoMap = lazy(() => import("./components/GeoMap"));
 const ColoringRules = lazy(() => import("./components/ColoringRules"));
 const DissectorBuilder = lazy(() => import("./components/DissectorBuilder"));
 const ColumnsDialog = lazy(() => import("./components/ColumnsDialog"));
@@ -42,6 +44,8 @@ type Overlay =
   | { kind: "protocharts" }
   | { kind: "flowcharts" }
   | { kind: "distributions" }
+  | { kind: "expert" }
+  | { kind: "geomap" }
   | { kind: "coloring" }
   | { kind: "objects"; proto: "http" | "smb" }
   | { kind: "posa" }
@@ -111,15 +115,22 @@ export default function App() {
   // Window-level drag & drop — robust regardless of the pane/overlay layout.
   useEffect(() => {
     if (!engine) return;
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
-    const onOver = (e: DragEvent) => { if (hasFiles(e)) { e.preventDefault(); setDragActive(true); } };
+    const isFileDrag = (e: DragEvent) =>
+      !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    // dragover MUST preventDefault for a drop to fire.
+    const onOver = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      setDragActive(true);
+    };
     const onLeave = (e: DragEvent) => { if (e.relatedTarget === null) setDragActive(false); };
+    // On drop, read files directly — `types` is unreliable/empty here in Chrome.
     const onDrop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
+      const f = e.dataTransfer?.files?.[0];
+      if (!f) return;
       e.preventDefault();
       setDragActive(false);
-      const f = e.dataTransfer?.files?.[0];
-      if (f) openFile(f);
+      openFile(f);
     };
     window.addEventListener("dragover", onOver);
     window.addEventListener("dragleave", onLeave);
@@ -367,6 +378,8 @@ export default function App() {
               { label: "Protocol Breakdown (sunburst/river)", onClick: () => setOverlay({ kind: "protocharts" }), disabled: !hasCapture },
               { label: "Flow Analysis (Sankey/heatmap)", onClick: () => setOverlay({ kind: "flowcharts" }), disabled: !hasCapture },
               { label: "Packet Distributions", onClick: () => setOverlay({ kind: "distributions" }), disabled: !hasCapture },
+              { label: "Expert Info", onClick: () => setOverlay({ kind: "expert" }), disabled: !hasCapture },
+              { label: "GeoIP Map", onClick: () => setOverlay({ kind: "geomap" }), disabled: !hasCapture },
               { label: "TCP Stream Graph", onClick: () => selected != null && setOverlay({ kind: "streamgraph", index: selected }), disabled: selected == null },
               { label: "Entity Explorer", onClick: () => setOverlay({ kind: "entities" }), disabled: !hasCapture },
             ]}
@@ -504,6 +517,17 @@ export default function App() {
         )}
         {engine && overlay?.kind === "distributions" && (
           <Distributions summaries={summaries} onClose={() => setOverlay(null)} />
+        )}
+        {engine && overlay?.kind === "expert" && (
+          <ExpertInfo
+            engine={engine}
+            onApplyFilter={applyFilter}
+            onJump={(idx) => { selectPacket(idx); setOverlay(null); }}
+            onClose={() => setOverlay(null)}
+          />
+        )}
+        {engine && overlay?.kind === "geomap" && (
+          <GeoMap engine={engine} onClose={() => setOverlay(null)} />
         )}
         {engine && overlay?.kind === "coloring" && (
           <ColoringRules engine={engine} rules={colorRules} onChange={setColorRules} onClose={() => setOverlay(null)} />
