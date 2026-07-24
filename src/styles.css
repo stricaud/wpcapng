@@ -187,9 +187,28 @@ body {
   text-overflow: ellipsis;
 }
 .c-mark {
-  width: 18px;
+  width: 30px;
   text-align: center;
   color: var(--hl);
+  white-space: nowrap;
+}
+.c-custom {
+  min-width: 90px;
+}
+.comment-bar {
+  width: calc(100% - 16px);
+  margin: 6px 8px;
+  padding: 5px 8px;
+  background: #2a2a1c;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--hl);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+.comment-bar:focus {
+  outline: none;
+  border-color: var(--accent-2);
 }
 .c-no {
   width: 64px;

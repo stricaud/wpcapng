@@ -27,7 +27,8 @@ const TT = (k: string) => TYPES.find((t) => t.key === k)!;
 
 interface Enum { name: string; value: string }
 interface Guard { ref: string; op: string; value: string }
-interface BField { name: string; type: string; n: number; label: string; ref?: string; enums: Enum[]; value?: number; guard?: Guard }
+interface Repeat { mode: "end" | "count"; countField?: string; item: string }
+interface BField { name: string; type: string; n: number; label: string; ref?: string; enums: Enum[]; value?: number; guard?: Guard; repeat?: Repeat }
 
 const OPS = ["==", "!=", "<", ">", ">=", "<="];
 function cmp(a: number, op: string, b: number): boolean {
@@ -111,6 +112,9 @@ export default function DissectorBuilder({
   const [guardRef, setGuardRef] = useState("");
   const [guardOp, setGuardOp] = useState("==");
   const [guardVal, setGuardVal] = useState("");
+  const [repMode, setRepMode] = useState<"none" | "end" | "count">("none");
+  const [repCount, setRepCount] = useState("");
+  const [repItem, setRepItem] = useState("item");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const consumed = fields.reduce((s, f) => s + f.n, 0);
@@ -141,7 +145,15 @@ export default function DissectorBuilder({
     }
     return 0;
   })();
-  const draftSize = guardActive && !guardHolds ? 0 : baseSize;
+  const repActive = repMode !== "none";
+  const draftSize = (() => {
+    if (repActive) {
+      if (repMode === "end") return remaining;
+      const cnt = fields.find((f) => f.name === repCount)?.value ?? 0;
+      return Math.min(remaining, cnt * (baseSize || 1));
+    }
+    return guardActive && !guardHolds ? 0 : baseSize;
+  })();
   const draftBytes = payload.subarray(consumed, consumed + draftSize);
 
   const addField = () => {
@@ -150,13 +162,15 @@ export default function DissectorBuilder({
     const nm = fname.replace(/[^A-Za-z0-9_]/g, "_") || `field${fields.length + 1}`;
     const f: BField = {
       name: nm, type, n: draftSize, label: flabel, ref: t.kind === "ref" ? ref : undefined,
-      enums: t.int ? enums : [], value: t.int && draftSize > 0 ? intVal(draftBytes, type) : undefined,
-      guard: guardActive ? { ref: guardRef, op: guardOp, value: guardVal } : undefined,
+      enums: t.int ? enums : [],
+      value: t.int && draftSize > 0 && !repActive ? intVal(draftBytes, type) : undefined,
+      guard: !repActive && guardActive ? { ref: guardRef, op: guardOp, value: guardVal } : undefined,
+      repeat: repActive ? { mode: repMode === "end" ? "end" : "count", countField: repMode === "count" ? repCount : undefined, item: repItem || "item" } : undefined,
     };
     setFields((fs) => [...fs, f]);
     setFname(`field${fields.length + 2}`);
     setFlabel(""); setEnums([]); setEnName(""); setEnVal("");
-    setGuardRef(""); setGuardVal(""); setMsg(null);
+    setGuardRef(""); setGuardVal(""); setRepMode("none"); setRepCount(""); setMsg(null);
   };
 
   const source = useMemo(() => {
@@ -170,8 +184,15 @@ export default function DissectorBuilder({
       : f.type;
     const lines = [`Object<main> ${N}`, `    col "${display || N}"`, `    abbrev "${abbrev || N.toLowerCase()}"`];
     for (const f of fields) {
-      const ind = f.guard ? "        " : "    ";
-      if (f.guard) lines.push(`    when ${safe(f.guard.ref)} ${f.guard.op} ${f.guard.value}:`);
+      let ind = "    ";
+      if (f.repeat) {
+        const spec = f.repeat.mode === "end" ? "until end" : safe(f.repeat.countField || "");
+        lines.push(`    repeat ${spec} as ${safe(f.repeat.item)}`);
+        ind = "        ";
+      } else if (f.guard) {
+        lines.push(`    when ${safe(f.guard.ref)} ${f.guard.op} ${f.guard.value}:`);
+        ind = "        ";
+      }
       lines.push(`${ind}required ${posaType(f)} ${safe(f.name)}${f.label ? ` "${f.label}"` : ""}`);
       for (const e of f.enums) if (e.name.trim()) lines.push(`${ind}    ${safe(e.name)} = ${e.value}`);
     }
@@ -265,9 +286,27 @@ export default function DissectorBuilder({
               </div>
             )}
 
+            <div className="fs-toolbar" style={{ flexWrap: "wrap" }}>
+              <span className="dim">Repeat (array):</span>
+              <select className="sel" value={repMode} onChange={(e) => setRepMode(e.target.value as "none" | "end" | "count")}>
+                <option value="none">no</option>
+                <option value="end">until end of payload</option>
+                <option value="count">count from field…</option>
+              </select>
+              {repMode === "count" && (
+                <select className="sel" value={repCount} onChange={(e) => setRepCount(e.target.value)}>
+                  <option value="">count field…</option>
+                  {intFields.map((f) => <option key={f.name} value={f.name}>{f.name} = {f.value}</option>)}
+                </select>
+              )}
+              {repActive && (
+                <input className="text-input compact" style={{ width: 110 }} placeholder="item name" value={repItem} onChange={(e) => setRepItem(e.target.value)} />
+              )}
+            </div>
+
             {fields.length > 0 && (
               <table className="io-rows">
-                <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Bytes</th><th>When</th><th>Label</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Bytes</th><th>When / Repeat</th><th>Label</th><th></th></tr></thead>
                 <tbody>
                   {fields.map((f, i) => (
                     <tr key={i}>
@@ -275,7 +314,9 @@ export default function DissectorBuilder({
                       <td className="mono">{f.name}{f.enums.length ? ` {${f.enums.length}}` : ""}</td>
                       <td className="mono">{f.type === "bytes_ref" ? `bytes[${f.ref}]` : f.type === "str_ref" ? `str[${f.ref}]` : f.type === "bytes" || f.type === "str" ? `${f.type}<${f.n}>` : f.type}</td>
                       <td className="num">{f.n}</td>
-                      <td className="mono dim">{f.guard ? `${f.guard.ref} ${f.guard.op} ${f.guard.value}` : ""}</td>
+                      <td className="mono dim">
+                        {f.repeat ? `repeat ${f.repeat.mode === "end" ? "until end" : f.repeat.countField}` : f.guard ? `${f.guard.ref} ${f.guard.op} ${f.guard.value}` : ""}
+                      </td>
                       <td>{f.label}</td>
                       <td><button className="btn small" onClick={() => setFields((fs) => fs.filter((_, k) => k !== i))}>✕</button></td>
                     </tr>

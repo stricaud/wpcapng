@@ -92,6 +92,8 @@ export interface LibpcapngModule {
   loadCapture(bytes: Uint8Array): number;
   getPacketCount(): number;
   getSummaries(): Summary[];
+  getStartTime(): number; // absolute epoch seconds of first packet
+  getFieldColumn(abbrev: string): string[]; // per-packet value of a field
   getDetail(index: number): Field[] | null;
   getPacketBytes(index: number): Uint8Array | null;
   getConversations(): Conversation[];
@@ -103,6 +105,9 @@ export interface LibpcapngModule {
   matchFilter(expr: string): Uint8Array; // 1 byte per packet
   matchFilters(exprs: string[]): Uint8Array[]; // one mask per expr
   exportPcapng(indices: number[]): Uint8Array; // subset → new pcapng
+  getComment(index: number): string;
+  setComment(index: number, text: string): void;
+  getCommentedPackets(): number[];
 
   loadPosaText(src: string): PosaLoadResult;
   listPosa(): PosaInfo[];

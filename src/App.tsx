@@ -3,7 +3,7 @@ import { getEngine, type Field, type LibpcapngModule, type Summary } from "./eng
 import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
 import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
-import { loadCols, resolveColumns, type ColConfig } from "./columns";
+import { buildColumns, loadCols, loadTimeFormat, saveTimeFormat, type ColConfig, type TimeFormat } from "./columns";
 import { csvCell, download } from "./util";
 import PacketList from "./components/PacketList";
 import DetailTree from "./components/DetailTree";
@@ -61,11 +61,26 @@ export default function App() {
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [dragActive, setDragActive] = useState(false);
   const [marked, setMarked] = useState<Set<number>>(new Set());
+  const [comment, setComment] = useState("");
+  const [commented, setCommented] = useState<Set<number>>(new Set());
   const [findParams, setFindParams] = useState<FindParams>(defaultFindParams);
   const [findStatus, setFindStatus] = useState<string | null>(null);
   const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
   const [colConfig, setColConfig] = useState<ColConfig[]>(loadCols());
-  const columns = useMemo(() => resolveColumns(colConfig), [colConfig]);
+  const [timeFormat, setTimeFormat] = useState<TimeFormat>(loadTimeFormat());
+  const startTime = useMemo(() => (engine ? engine.getStartTime() : 0), [engine, summaries]);
+  const customValues = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    if (engine)
+      for (const c of colConfig)
+        if (c.visible && c.key.startsWith("custom:") && c.abbrev) m[c.key] = engine.getFieldColumn(c.abbrev);
+    return m;
+  }, [engine, summaries, colConfig]);
+  const columns = useMemo(
+    () => buildColumns(colConfig, { timeFormat, startTime, summaries, custom: customValues }),
+    [colConfig, timeFormat, startTime, summaries, customValues],
+  );
+  const setTimeFmt = (f: TimeFormat) => { setTimeFormat(f); saveTimeFormat(f); };
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const hasCapture = summaries.length > 0;
@@ -130,6 +145,8 @@ export default function App() {
       setAppliedFilter("");
       setFilterErr(null);
       setMarked(new Set());
+      setComment("");
+      setCommented(new Set(engine.getCommentedPackets()));
       setFindStatus(null);
     } finally {
       setBusy(false);
@@ -142,6 +159,18 @@ export default function App() {
     setDetail(engine.getDetail(idx));
     setBytes(engine.getPacketBytes(idx));
     setHighlight(null);
+    setComment(engine.getComment(idx));
+  }
+
+  function editComment(text: string) {
+    if (!engine || selected == null) return;
+    engine.setComment(selected, text);
+    setComment(text);
+    setCommented((prev) => {
+      const n = new Set(prev);
+      text.trim() ? n.add(selected) : n.delete(selected);
+      return n;
+    });
   }
 
   // Find the most specific (smallest) dissection field whose byte range covers
@@ -344,6 +373,10 @@ export default function App() {
             items={[
               { label: "Coloring Rules…", onClick: () => setOverlay({ kind: "coloring" }), disabled: !engine },
               { label: "Columns…", onClick: () => setOverlay({ kind: "columns" }), disabled: !engine },
+              { label: `${timeFormat === "relative" ? "• " : ""}Time: seconds since first`, onClick: () => setTimeFmt("relative") },
+              { label: `${timeFormat === "delta" ? "• " : ""}Time: delta from previous`, onClick: () => setTimeFmt("delta") },
+              { label: `${timeFormat === "abs-local" ? "• " : ""}Time: absolute (local)`, onClick: () => setTimeFmt("abs-local") },
+              { label: `${timeFormat === "abs-utc" ? "• " : ""}Time: absolute (UTC)`, onClick: () => setTimeFmt("abs-utc") },
             ]}
           />
           <Menu
@@ -381,11 +414,19 @@ export default function App() {
         )}
       </div>
 
-      <PacketList rows={rows} selected={selected} marked={marked} colors={rowColors} columns={columns} onSelect={selectPacket} />
+      <PacketList rows={rows} selected={selected} marked={marked} commented={commented} colors={rowColors} columns={columns} onSelect={selectPacket} />
 
       <div className="lower">
         <div className="pane detail-pane">
           <div className="pane-title">Packet details</div>
+          {selected != null && (
+            <input
+              className="comment-bar"
+              placeholder="+ add a packet comment…"
+              value={comment}
+              onChange={(e) => editComment(e.target.value)}
+            />
+          )}
           <DetailTree
             layers={detail}
             selected={highlight}

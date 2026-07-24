@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Summary } from "../engine";
 import type { RowColor } from "../coloring";
-import type { ColumnDef } from "../columns";
+import type { RuntimeColumn } from "../columns";
 
 // Subtle protocol-based row tint, à la Wireshark coloring rules.
 function protoClass(proto: string): string {
@@ -20,6 +20,7 @@ export default function PacketList({
   rows,
   selected,
   marked,
+  commented,
   colors,
   columns,
   onSelect,
@@ -27,8 +28,9 @@ export default function PacketList({
   rows: { idx: number; s: Summary }[];
   selected: number | null;
   marked: Set<number>;
+  commented: Set<number>;
   colors: RowColor[];
-  columns: ColumnDef[];
+  columns: RuntimeColumn[];
   onSelect: (idx: number) => void;
 }) {
   const selRef = useRef<HTMLTableRowElement>(null);
@@ -59,9 +61,9 @@ export default function PacketList({
                 style={c && !isSel ? { background: c.bg, color: c.fg } : undefined}
                 onClick={() => onSelect(idx)}
               >
-                <td className="c-mark">{marked.has(idx) ? "◆" : ""}</td>
+                <td className="c-mark">{marked.has(idx) ? "◆" : ""}{commented.has(idx) ? "🗩" : ""}</td>
                 {columns.map((col) => (
-                  <td key={col.key} className={col.className}>{col.render(s)}</td>
+                  <td key={col.key} className={col.className}>{col.value(idx, s)}</td>
                 ))}
               </tr>
             );
