@@ -30,7 +30,7 @@ export default function ProtocolCharts({
     const keep = new Set(top);
     const maxT = summaries.length ? summaries[summaries.length - 1].time : 0;
     const iv = maxT > 60 ? 1 : maxT > 6 ? 0.1 : 0.01;
-    const nb = Math.max(1, Math.ceil((maxT + 1e-9) / iv));
+    const nb = Math.min(20000, Math.max(1, Math.ceil((maxT + 1e-9) / iv)));
     const byName: Record<string, number[]> = {};
     const nameOf = (p: string) => (keep.has(p) ? p : "other");
     for (const s of summaries) {

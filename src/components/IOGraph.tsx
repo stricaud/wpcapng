@@ -41,7 +41,7 @@ export default function IOGraph({
 
   const buckets = useMemo(() => {
     const maxT = summaries.length ? summaries[summaries.length - 1].time : 0;
-    const nb = Math.max(1, Math.ceil((maxT + 1e-9) / interval));
+    const nb = Math.min(20000, Math.max(1, Math.ceil((maxT + 1e-9) / interval)));
     return { nb, labels: Array.from({ length: nb }, (_, i) => (i * interval).toFixed(2)) };
   }, [summaries, interval]);
 

@@ -34,7 +34,7 @@ export default function FlowCharts({
   const heat = useMemo(() => {
     const maxT = summaries.length ? summaries[summaries.length - 1].time : 0;
     const iv = maxT > 60 ? 1 : maxT > 6 ? 0.1 : 0.01;
-    const nb = Math.max(1, Math.ceil((maxT + 1e-9) / iv));
+    const nb = Math.min(20000, Math.max(1, Math.ceil((maxT + 1e-9) / iv)));
     const totals = new Map<string, number>();
     for (const s of summaries) totals.set(s.src, (totals.get(s.src) ?? 0) + s.length);
     const hosts = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map((e) => e[0]);
