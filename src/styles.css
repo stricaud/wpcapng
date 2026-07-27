@@ -178,6 +178,29 @@ body {
   font-weight: 600;
   z-index: 1;
   white-space: nowrap;
+  cursor: pointer;              /* click to sort */
+  user-select: none;
+}
+/* sticky already establishes a positioning context for .col-resize */
+.packet-list thead th.sorted {
+  color: var(--accent-2);
+}
+.packet-list thead th .th-arrow {
+  margin-left: 4px;
+  font-size: 9px;
+  vertical-align: middle;
+}
+/* right-edge grab strip for resizing; sits above the sort/drag click area */
+.packet-list thead th .col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+.packet-list thead th.dragover {
+  box-shadow: inset 2px 0 0 var(--accent-2);
 }
 .packet-list td {
   padding: 2px 8px;

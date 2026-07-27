@@ -3,7 +3,7 @@ import { getEngine, type Field, type LibpcapngModule, type Summary } from "./eng
 import { applyStored, loadStored } from "./posaStore";
 import { defaultFindParams, findPacket, type FindParams } from "./find";
 import { computeRowColors, loadColorRules, type ColorRule } from "./coloring";
-import { buildColumns, loadCols, loadTimeFormat, saveTimeFormat, type ColConfig, type TimeFormat } from "./columns";
+import { buildColumns, loadCols, saveCols, loadTimeFormat, saveTimeFormat, reorderCols, sortRows, type ColConfig, type SortState, type TimeFormat } from "./columns";
 import { buildEnrich } from "./enrichment";
 import { loadGeo, type GeoDB } from "./geoip";
 import { EXPERT_HELP, SEVERITY_META, loadExpert, saveExpert, type ExpertRule } from "./expert";
@@ -90,6 +90,14 @@ export default function App() {
   const [findStatus, setFindStatus] = useState<string | null>(null);
   const [colorRules, setColorRules] = useState<ColorRule[]>(loadColorRules());
   const [colConfig, setColConfig] = useState<ColConfig[]>(loadCols());
+  const [sort, setSort] = useState<SortState>(null);
+  // Persist column geometry (order/width) as the user changes it.
+  const updateCols = (next: ColConfig[]) => { setColConfig(next); saveCols(next); };
+  const onSortColumn = (key: string) =>
+    setSort((s) => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
+  const onResizeColumn = (key: string, width: number) =>
+    updateCols(colConfig.map((c) => (c.key === key ? { ...c, width } : c)));
+  const onReorderColumn = (fromKey: string, toKey: string) => updateCols(reorderCols(colConfig, fromKey, toKey));
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(loadTimeFormat());
   const [geoDb, setGeoDb] = useState<GeoDB | null>(null);
   useEffect(() => { loadGeo().then(setGeoDb); }, []);
@@ -272,6 +280,13 @@ export default function App() {
     return all.filter(({ idx }) => mask[idx]);
   }, [summaries, appliedFilter, engine, enrich]);
 
+  // Column sort (type-aware) applied on top of the filtered rows. Navigation
+  // (find, save-as, auto-select) follows this visible order.
+  const sortedRows = useMemo(
+    () => (sort ? sortRows(rows, columns.find((c) => c.key === sort.key), sort.dir) : rows),
+    [rows, sort, columns],
+  );
+
   const activeHighlight = hover ?? highlight;
 
   // Per-packet coloring from the coloring rules (first match wins).
@@ -292,7 +307,7 @@ export default function App() {
 
   function runFind(dir: 1 | -1) {
     if (!engine) return;
-    const list = rows.map((r) => r.idx);
+    const list = sortedRows.map((r) => r.idx);
     const found = findPacket(engine, summaries, list, selected, findParams, dir);
     if (found == null) setFindStatus("No match");
     else {
@@ -309,7 +324,7 @@ export default function App() {
   }
 
   function exportSummary(fmt: "csv" | "json") {
-    const list = rows.map((r) => r.s);
+    const list = sortedRows.map((r) => r.s);
     if (fmt === "json") {
       download("packets.json", JSON.stringify(list, null, 2), "application/json");
       return;
@@ -503,7 +518,7 @@ export default function App() {
         )}
       </div>
 
-      <PacketList rows={rows} selected={selected} marked={marked} commented={commented} colors={rowColors} columns={columns} onSelect={selectPacket} />
+      <PacketList rows={sortedRows} selected={selected} marked={marked} commented={commented} colors={rowColors} columns={columns} sort={sort} onSelect={selectPacket} onSort={onSortColumn} onResize={onResizeColumn} onReorder={onReorderColumn} />
 
       <div className="lower">
         <div className="pane detail-pane">
@@ -689,7 +704,7 @@ export default function App() {
           <SaveAsDialog
             engine={engine}
             total={summaries.length}
-            displayed={rows.map((r) => r.idx)}
+            displayed={sortedRows.map((r) => r.idx)}
             marked={[...marked].sort((a, b) => a - b)}
             selected={selected}
             onClose={() => setOverlay(null)}
