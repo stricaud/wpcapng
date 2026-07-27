@@ -12,15 +12,22 @@ export interface ColorRule {
 
 const KEY = "wpcapng.colorrules.v1";
 
-// Ordered: first matching rule wins (like Wireshark).
+// Ordered: first matching rule wins (like Wireshark). Colors follow Wireshark's
+// default scheme (bad-TCP/checksum red, name-resolution blue, HTTP green, …),
+// adapted to this dark theme. Error/anomaly rules come first so they win over
+// the plain per-protocol tints below.
 export const DEFAULT_RULES: ColorRule[] = [
-  { name: "TCP retransmission", filter: "tcp.analysis.retransmission", fg: "#ffffff", bg: "#7a1f1f" },
-  { name: "TCP out-of-order", filter: "tcp.analysis.out_of_order", fg: "#ffd0ff", bg: "#4a2a4a" },
-  { name: "TCP duplicate ACK", filter: "tcp.analysis.duplicate_ack", fg: "#ffe0a0", bg: "#5a3a1a" },
+  { name: "Bad TCP", filter: "tcp.analysis.retransmission || tcp.analysis.out_of_order || tcp.analysis.duplicate_ack", fg: "#ffffff", bg: "#7a1f1f" },
+  { name: "Checksum errors", filter: "ip.checksum.bad || tcp.checksum.bad || udp.checksum.bad", fg: "#ffffff", bg: "#5a1414" },
   { name: "Connection reset", filter: "tcp.flags.reset == 1", fg: "#ffffff", bg: "#7a1f1f" },
+  { name: "TCP SYN/FIN", filter: "tcp.flags.syn == 1 || tcp.flags.fin == 1", fg: "#c8c8c8", bg: "#20242a" },
   { name: "HTTP", filter: "http || http2", fg: "#b6e8a0", bg: "#1e3a1a" },
-  { name: "DNS", filter: "dns", fg: "#d0b8ff", bg: "#2b2438" },
   { name: "TLS", filter: "tls", fg: "#a0e8c0", bg: "#14322a" },
+  { name: "DNS", filter: "dns || mdns || llmnr || nbns", fg: "#a8c8f0", bg: "#1a2440" },
+  { name: "SMB", filter: "smb || smb2", fg: "#e8d090", bg: "#3a3018" },
+  { name: "DHCP", filter: "dhcp || dhcpv6 || bootp", fg: "#e0c0f0", bg: "#2e2340" },
+  { name: "Routing", filter: "ospf || bgp || eigrp || rip || ripv2 || hsrp || vrrp || pim", fg: "#f0d0a0", bg: "#33291a" },
+  { name: "ICMP errors", filter: "icmp.type == 3 || icmp.type == 11 || icmpv6.type == 1", fg: "#ffffff", bg: "#5a2a14" },
   { name: "ICMP", filter: "icmp || icmpv6", fg: "#f0a0a0", bg: "#3a2020" },
   { name: "ARP", filter: "arp", fg: "#e0e0a0", bg: "#2f2f18" },
   { name: "UDP", filter: "udp", fg: "#a0c8e0", bg: "#182a34" },
