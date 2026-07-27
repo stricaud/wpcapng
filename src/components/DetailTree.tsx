@@ -35,8 +35,14 @@ function FieldNode({
   const isActive =
     active != null && field.off === active[0] && field.len === active[1];
 
-  const [userOpen, setUserOpen] = useState(depth < 1);
-  const open = containsAnchor ? true : userOpen;
+  // `open` is driven solely by the user's twisty toggles. Selection no longer
+  // forces it open on every render (which used to fight the toggle); instead we
+  // auto-reveal once, imperatively, when the selection anchor moves into this
+  // node — e.g. clicking a field in the hex view expands its ancestors.
+  const [open, setOpen] = useState(depth < 1);
+  useEffect(() => {
+    if (containsAnchor) setOpen(true);
+  }, [containsAnchor]);
 
   const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -60,12 +66,20 @@ function FieldNode({
         onMouseEnter={() => field.len > 0 && onHover(range)}
         onMouseLeave={() => onHover(null)}
         onClick={() => {
-          if (hasKids) setUserOpen((o) => !o);
+          // Row body selects a field with bytes; a structural node (no bytes)
+          // has nothing to select, so clicking it toggles instead. The twisty
+          // is the dedicated toggle for every parent (handled below).
           if (field.len > 0) onSelect(range);
+          else if (hasKids) setOpen((o) => !o);
         }}
         title={field.abbrev}
       >
-        <span className="twisty">{hasKids ? (open ? "▾" : "▸") : ""}</span>
+        <span
+          className="twisty"
+          onClick={hasKids ? (e) => { e.stopPropagation(); setOpen((o) => !o); } : undefined}
+        >
+          {hasKids ? (open ? "▾" : "▸") : ""}
+        </span>
         <span className="tree-text">{text}</span>
       </div>
       {open &&

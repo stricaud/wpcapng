@@ -340,9 +340,14 @@ body {
   background: #3a3a1c;
 }
 .twisty {
-  width: 12px;
+  width: 16px;
+  text-align: center;
   color: var(--text-dim);
   flex: none;
+  cursor: pointer;
+}
+.twisty:hover {
+  color: var(--text);
 }
 .tree-text {
   overflow: hidden;
