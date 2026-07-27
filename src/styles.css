@@ -225,6 +225,10 @@ body {
 .c-addr {
   width: 160px;
 }
+.c-port {
+  width: 64px;
+  text-align: right;
+}
 .c-proto {
   width: 80px;
 }

@@ -11,7 +11,9 @@ export const COLUMN_DEFS: ColumnMeta[] = [
   { key: "no", label: "No.", className: "c-no", render: (s) => s.no },
   { key: "time", label: "Time", className: "c-time", render: (s) => s.time.toFixed(6) },
   { key: "src", label: "Source", className: "c-addr", render: (s) => s.src },
+  { key: "srcport", label: "Src port", className: "c-port", render: (s) => s.srcport },
   { key: "dst", label: "Destination", className: "c-addr", render: (s) => s.dst },
+  { key: "dstport", label: "Dst port", className: "c-port", render: (s) => s.dstport },
   { key: "proto", label: "Protocol", className: "c-proto", render: (s) => s.proto },
   { key: "length", label: "Length", className: "c-len", render: (s) => s.length },
   { key: "info", label: "Info", className: "c-info", render: (s) => s.info },
@@ -36,8 +38,17 @@ export function loadCols(): ColConfig[] {
     const raw = localStorage.getItem(COLS_KEY);
     if (!raw) return DEFAULT_COLS;
     const parsed = JSON.parse(raw) as ColConfig[];
-    // append any builtin columns added since the config was saved
-    for (const c of COLUMN_DEFS) if (!parsed.some((p) => p.key === c.key)) parsed.push({ key: c.key, visible: true });
+    // splice in any builtin columns added since the config was saved, next to
+    // the builtin that precedes them in COLUMN_DEFS (so e.g. "Src port" lands
+    // right after "Source" rather than at the far right).
+    COLUMN_DEFS.forEach((c, i) => {
+      if (parsed.some((p) => p.key === c.key)) return;
+      const prevKey = COLUMN_DEFS[i - 1]?.key;
+      const at = parsed.findIndex((p) => p.key === prevKey);
+      const entry = { key: c.key, visible: true };
+      if (at >= 0) parsed.splice(at + 1, 0, entry);
+      else parsed.push(entry);
+    });
     return parsed.length ? parsed : DEFAULT_COLS;
   } catch {
     return DEFAULT_COLS;

@@ -14,6 +14,8 @@ export interface Summary {
   time: number; // seconds relative to first packet
   src: string;
   dst: string;
+  srcport: string; // transport source port ("" if none)
+  dstport: string; // transport destination port ("" if none)
   proto: string;
   length: number;
   info: string;
