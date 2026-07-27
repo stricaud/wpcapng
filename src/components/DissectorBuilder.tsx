@@ -45,6 +45,13 @@ function cmp(a: number, op: string, b: number): boolean {
 
 const hx = (b: number) => b.toString(16).padStart(2, "0");
 
+// Render bytes as a posa content signature: printable ASCII stays literal,
+// everything else (and " and \) becomes \xNN.
+const escSig = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) =>
+    b >= 0x20 && b < 0x7f && b !== 0x22 && b !== 0x5c ? String.fromCharCode(b) : `\\x${hx(b)}`,
+  ).join("");
+
 function analyze(layers: Field[] | null): { dataOff: number; dataLen: number; proto: "tcp" | "udp" | null; port: number } {
   let dataOff = 0, dataLen = 0, proto: "tcp" | "udp" | null = null, port = 0;
   const walk = (f: Field) => {
@@ -116,6 +123,17 @@ export default function DissectorBuilder({
   const [repCount, setRepCount] = useState("");
   const [repItem, setRepItem] = useState("item");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Content signature — identify this protocol by what its payload starts with,
+  // so it is recognised on ANY port (a non-standard port, or no port at all).
+  const [sigOn, setSigOn] = useState(false);
+  const [sigOff, setSigOff] = useState(0);
+  const [sigText, setSigText] = useState(() => escSig(payload.subarray(0, Math.min(4, payload.length))));
+
+  // Filter aliases — Wireshark-style synonyms or named macro expressions.
+  const [aliases, setAliases] = useState<{ from: string; to: string }[]>([]);
+  const [aliasFrom, setAliasFrom] = useState("");
+  const [aliasTo, setAliasTo] = useState("");
 
   const consumed = fields.reduce((s, f) => s + f.n, 0);
   const remaining = Math.max(0, payload.length - consumed);
@@ -197,8 +215,11 @@ export default function DissectorBuilder({
       for (const e of f.enums) if (e.name.trim()) lines.push(`${ind}    ${safe(e.name)} = ${e.value}`);
     }
     if (port > 0) lines.push(`rule ${proto}.port == ${port} => ${N}`);
+    if (sigOn && sigText.trim())
+      lines.push(`rule ${proto}.content${sigOff > 0 ? `@${sigOff}` : ""} "${sigText}" => ${N}`);
+    for (const a of aliases) if (a.from.trim() && a.to.trim()) lines.push(`alias ${a.from.trim()} => ${a.to.trim()}`);
     return lines.join("\n") + "\n";
-  }, [name, display, abbrev, fields, proto, port]);
+  }, [name, display, abbrev, fields, proto, port, sigOn, sigOff, sigText, aliases]);
 
   const saveLoad = () => {
     const res = engine.loadPosaText(source);
@@ -336,6 +357,37 @@ export default function DissectorBuilder({
                 <option value="udp">udp.port</option>
               </select>
               <input className="text-input compact" style={{ width: 84 }} type="number" placeholder="port" value={port || ""} onChange={(e) => setPort(Number(e.target.value))} />
+            </div>
+
+            <h3>Detection <span className="dim" style={{ fontSize: 12, fontWeight: 400 }}>— recognise this protocol by content, not just its port</span></h3>
+            <div className="fs-toolbar" style={{ flexWrap: "wrap" }}>
+              <label className="dim" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <input type="checkbox" checked={sigOn} onChange={(e) => setSigOn(e.target.checked)} />
+                content signature
+              </label>
+              {sigOn && (
+                <>
+                  <span className="dim">at offset</span>
+                  <input className="text-input compact" style={{ width: 60 }} type="number" min={0} value={sigOff} onChange={(e) => setSigOff(Math.max(0, Number(e.target.value)))} />
+                  <input className="text-input compact mono" style={{ width: 200 }} placeholder={'e.g. GET  or  \\x16\\x03'} value={sigText} onChange={(e) => setSigText(e.target.value)} />
+                  <button className="btn small" onClick={() => setSigText(escSig(payload.subarray(sigOff, sigOff + 4)))}>from payload</button>
+                  <span className="dim">matches on any port — {proto}.content{sigOff > 0 ? `@${sigOff}` : ""}</span>
+                </>
+              )}
+            </div>
+
+            <h3>Aliases <span className="dim" style={{ fontSize: 12, fontWeight: 400 }}>— filter/column synonyms &amp; named expressions</span></h3>
+            <div className="fs-toolbar" style={{ flexWrap: "wrap" }}>
+              {aliases.map((a, i) => (
+                <span key={i} className="chip mono">
+                  {a.from} ⇒ {a.to}
+                  <button className="btn small" style={{ marginLeft: 4 }} onClick={() => setAliases((as) => as.filter((_, k) => k !== i))}>✕</button>
+                </span>
+              ))}
+              <input className="text-input compact mono" style={{ width: 150 }} placeholder="name (e.g. myproto.cmd)" value={aliasFrom} onChange={(e) => setAliasFrom(e.target.value)} />
+              <span className="dim">⇒</span>
+              <input className="text-input compact mono" style={{ width: 190 }} placeholder="field, or expression" value={aliasTo} onChange={(e) => setAliasTo(e.target.value)} />
+              <button className="btn small" disabled={!aliasFrom.trim() || !aliasTo.trim()} onClick={() => { setAliases((as) => [...as, { from: aliasFrom, to: aliasTo }]); setAliasFrom(""); setAliasTo(""); }}>+ alias</button>
             </div>
 
             <h3>Generated .posa</h3>
