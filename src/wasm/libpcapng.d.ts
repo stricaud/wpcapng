@@ -114,6 +114,7 @@ export interface ExtractedObject {
 export interface LibpcapngModule {
   loadCapture(bytes: Uint8Array): number;
   getPacketCount(): number;
+  setVerifyChecksums(on: boolean): void; // off by default (like Wireshark)
   getSummaries(): Summary[];
   getStartTime(): number; // absolute epoch seconds of first packet
   getFieldColumn(abbrev: string): string[]; // per-packet value of a field

@@ -99,6 +99,7 @@ export default function App() {
     updateCols(colConfig.map((c) => (c.key === key ? { ...c, width } : c)));
   const onReorderColumn = (fromKey: string, toKey: string) => updateCols(reorderCols(colConfig, fromKey, toKey));
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(loadTimeFormat());
+  const [verifyChecksums, setVerifyChecksums] = useState(false);
   const [geoDb, setGeoDb] = useState<GeoDB | null>(null);
   useEffect(() => { loadGeo().then(setGeoDb); }, []);
   const tcpAnalysis = useMemo(
@@ -289,11 +290,21 @@ export default function App() {
 
   const activeHighlight = hover ?? highlight;
 
-  // Per-packet coloring from the coloring rules (first match wins).
+  // Per-packet coloring from the coloring rules (first match wins). Recomputed
+  // when checksum validation toggles, since the checksum.bad fields it may match
+  // on only exist while validation is enabled.
   const rowColors = useMemo(
     () => (engine ? computeRowColors(engine, colorRules, summaries.length, enrich) : []),
-    [engine, colorRules, summaries, enrich],
+    [engine, colorRules, summaries, enrich, verifyChecksums],
   );
+
+  const toggleChecksums = () => {
+    if (!engine) return;
+    const on = !verifyChecksums;
+    engine.setVerifyChecksums(on);
+    setVerifyChecksums(on);
+    if (selected != null) setDetail(engine.getDetail(selected));
+  };
   const customJson = useMemo(() => {
     if (selected == null || !bytes || summaries[selected]?.proto !== "PCAPNG") return null;
     return tryParseJson(bytes);
@@ -479,6 +490,7 @@ export default function App() {
               { label: `${timeFormat === "delta" ? "• " : ""}Time: delta from previous`, onClick: () => setTimeFmt("delta") },
               { label: `${timeFormat === "abs-local" ? "• " : ""}Time: absolute (local)`, onClick: () => setTimeFmt("abs-local") },
               { label: `${timeFormat === "abs-utc" ? "• " : ""}Time: absolute (UTC)`, onClick: () => setTimeFmt("abs-utc") },
+              { label: `${verifyChecksums ? "• " : ""}Validate checksums`, onClick: toggleChecksums, disabled: !engine },
             ]}
           />
           <Menu
